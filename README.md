@@ -211,7 +211,7 @@ Dazzle's server, not the connected chat model, owns the expensive local tooling:
 
 Claude/Gemini then use their vision and design judgment to inspect the screenshot or extracted frames. FFmpeg itself does not understand whether a page is beautiful; it supplies real rendered frames so the model can critique what was actually built instead of trusting source HTML. Remotion and HyperFrames are supported as frame-accurate planning/export targets, not as substitutes for visual inspection.
 
-For an existing website, pass its HTTPS URL to `dazzle_render_screenshot` or `dazzle_visual_audit`, capture the target at the same viewport as the redesign, then run `dazzle_redesign_plan` and compare both rendered images before approval.
+For an existing website, pass its HTTPS URL as `targetUrl` to the primary `dazzle` tool. Dazzle fetches the target HTML, extracts the title, meta description, H1/H2/H3 headings, and visible copy into `target-snapshot.json`, captures the target screenshot, then generates and attaches the redesign screenshot at the same viewport. This prevents a redesign from losing the original page's real product details while still forcing a visual quality review.
 
 ## Deploy a public MCP on Render
 

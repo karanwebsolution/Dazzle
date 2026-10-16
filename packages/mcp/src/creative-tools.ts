@@ -77,25 +77,39 @@ async function screenshot(target: string, outputPath: string, width: number, hei
   return outputPath;
 }
 async function ffprobe(input: string): Promise<unknown> { const result = await exec("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", input], { timeout: 60_000 }); return JSON.parse(result.stdout); }
+async function pageSnapshot(targetUrl: string): Promise<{ url: string; title: string; description: string; headings: string[]; visibleCopy: string }> {
+  const response = await fetch(targetUrl, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
+  const html = await response.text();
+  const one = (pattern: RegExp): string => (html.match(pattern)?.[1] ?? "").replace(/\s+/g, " ").trim();
+  const headings = [...html.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi)].map((m) => (m[1] ?? "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 24);
+  const visibleCopy = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<svg[\s\S]*?<\/svg>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 6000);
+  return { url: response.url, title: one(/<title[^>]*>([\s\S]*?)<\/title>/i), description: one(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i), headings, visibleCopy };
+}
 
 export async function executeDazzlePipeline(args: Brief & { operation: "create" | "redesign"; targetUrl?: string; outputDir: string; width: number; height: number }): Promise<unknown> {
   const dir = args.outputDir;
   await mkdir(dir, { recursive: true });
-  const plan = strategy(args);
+  const snapshot = args.targetUrl ? await pageSnapshot(args.targetUrl).catch(() => undefined) : undefined;
+  const inferredBrand = args.brand || snapshot?.title.split(/\s[|—-]\s/)[0] || "Dazzle project";
+  const inferredProduct = args.product || snapshot?.headings[0] || snapshot?.title || "A clearer digital experience";
+  const enrichedArgs = { ...args, brand: inferredBrand, product: inferredProduct, existingHtml: snapshot ? `${args.existingHtml ?? ""}\nTARGET PAGE SNAPSHOT:\n${snapshot.visibleCopy}` : args.existingHtml };
+  const plan = strategy(enrichedArgs);
   const html = generateLanding(plan.landing);
   const htmlPath = `${dir}/landing.html`;
   const strategyPath = `${dir}/strategy.json`;
   await writeFile(htmlPath, html);
   await writeFile(strategyPath, `${JSON.stringify(plan, null, 2)}\n`);
+  const snapshotPath = snapshot ? `${dir}/target-snapshot.json` : undefined;
+  if (snapshotPath && snapshot) await writeFile(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
   const compositionErrors = lintComposition(html);
   const generatedScreenshot = await screenshot(htmlPath, `${dir}/generated.png`, args.width, args.height);
   let targetScreenshot: string | undefined;
   if (args.targetUrl) targetScreenshot = await screenshot(args.targetUrl, `${dir}/target.png`, args.width, args.height);
-  return { mode: args.operation, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", "contextual strategy selected", "deterministic HTML generated", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["target screenshot captured for redesign comparison"] : []), "ready for visual review"], strategy: plan, artifacts: { html: htmlPath, strategy: strategyPath, generatedScreenshot, targetScreenshot }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: "Inspect generated.png (and target.png for redesign) with the connected vision model. Do not approve from source HTML alone." } };
+  return { mode: args.operation, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", ...(snapshot ? ["target HTML fetched and content snapshot created"] : []), "contextual strategy selected", "deterministic HTML generated", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["target screenshot captured for redesign comparison"] : []), "ready for visual review"], source: snapshot ? { title: snapshot.title, description: snapshot.description, headings: snapshot.headings, snapshot: snapshotPath } : undefined, strategy: plan, artifacts: { html: htmlPath, strategy: strategyPath, generatedScreenshot, targetScreenshot, snapshot: snapshotPath }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: "Inspect generated.png (and target.png for redesign) with the connected vision model. Do not approve from source HTML alone." } };
 }
 
 export function registerCreativeTools(server: McpServer): void {
-  const buildSchema = { operation: z.enum(["create", "redesign"]).default("create"), brand: z.string().min(1), product: z.string().min(1), audience: z.string().optional(), goal: z.string().optional(), tone: z.string().optional(), brief: z.string().optional(), targetUrl: z.string().url().optional(), outputDir: z.string().default("/tmp/dazzle-build"), width: z.number().int().positive().default(1440), height: z.number().int().positive().default(1000) };
+  const buildSchema = { operation: z.enum(["create", "redesign"]).default("create"), brand: z.string().optional().default("Dazzle project"), product: z.string().optional().default("A clearer digital experience"), audience: z.string().optional(), goal: z.string().optional(), tone: z.string().optional(), brief: z.string().optional(), targetUrl: z.string().url().optional(), outputDir: z.string().default("/tmp/dazzle-build"), width: z.number().int().positive().default(1440), height: z.number().int().positive().default(1000) };
   const buildDescription = "PRIMARY DAZZLE ACTION. Use this whenever the user asks to use Dazzle, create a landing page, redesign a website, improve a page, make a website beautiful, add animation, or turn an idea into a real page. Translate the user's normal-language request into these fields, then Dazzle manages strategy, generation, Chromium rendering, FFmpeg-ready artifacts, validation, and returns actual screenshots for visual review. Do not merely explain and do not manually select specialist tools.";
   server.tool("dazzle", buildDescription, buildSchema, async (args) => pipelineOutput(await executeDazzlePipeline(args)));
   server.tool("dazzle_build", buildDescription, buildSchema, async (args) => pipelineOutput(await executeDazzlePipeline(args)));
