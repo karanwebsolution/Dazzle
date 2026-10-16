@@ -42,6 +42,84 @@ Available styles: `saas`, `editorial`, `bento`, `glass`, `brutalist`, `luxury`.
 Available themes: `midnight`, `aurora`, `sunset`, `paper`, `mono`.
 Available motion: `particles`, `cube`, `wave`, `gradient`, `none`.
 
+## Model providers in the CLI
+
+The CLI includes a provider registry with OpenAI-compatible support for the major hosted model APIs. API keys are read from the provider's environment variable or can be stored in `~/.dazzle/config.json` with restrictive `0600` permissions. The key is never committed to the repository.
+
+Supported presets and default base URLs:
+
+| Provider | ID | Base URL | Environment variable |
+|---|---|---|---|
+| OpenAI | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+| Anthropic Claude | `anthropic` | `https://api.anthropic.com/v1` | `ANTHROPIC_API_KEY` |
+| Google Gemini | `google` | `https://generativelanguage.googleapis.com/v1beta/openai` | `GEMINI_API_KEY` |
+| OpenRouter | `openrouter` | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| Groq | `groq` | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` |
+| Mistral | `mistral` | `https://api.mistral.ai/v1` | `MISTRAL_API_KEY` |
+| DeepSeek | `deepseek` | `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
+| xAI Grok | `xai` | `https://api.x.ai/v1` | `XAI_API_KEY` |
+| Together AI | `together` | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` |
+| Fireworks AI | `fireworks` | `https://api.fireworks.ai/inference/v1` | `FIREWORKS_API_KEY` |
+| Cerebras | `cerebras` | `https://api.cerebras.ai/v1` | `CEREBRAS_API_KEY` |
+| Perplexity | `perplexity` | `https://api.perplexity.ai` | `PERPLEXITY_API_KEY` |
+| Cohere | `cohere` | `https://api.cohere.ai/compatibility/v1` | `COHERE_API_KEY` |
+| Deep Infra | `deepinfra` | `https://api.deepinfra.com/v1/openai` | `DEEPINFRA_API_KEY` |
+| SambaNova | `sambanova` | `https://api.sambanova.ai/v1` | `SAMBANOVA_API_KEY` |
+| Moonshot Kimi | `moonshot` | `https://api.moonshot.ai/v1` | `MOONSHOT_API_KEY` |
+| Qwen / Alibaba | `qwen` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `DASHSCOPE_API_KEY` |
+| NVIDIA NIM | `nvidia` | `https://integrate.api.nvidia.com/v1` | `NVIDIA_API_KEY` |
+
+List providers and their default models:
+
+```bash
+node packages/cli/dist/index.js providers list
+```
+
+Configure a provider interactively. The key is hidden while typing:
+
+```bash
+node packages/cli/dist/index.js providers add openrouter
+```
+
+Or use an environment variable, which is preferred for CI and shared machines:
+
+```bash
+export OPENAI_API_KEY="your-key"
+node packages/cli/dist/index.js providers add openai --model gpt-4o-mini
+```
+
+You can override a provider's model and base URL for a self-hosted or compatible gateway:
+
+```bash
+node packages/cli/dist/index.js providers add my-provider \
+  --api-key "$MY_PROVIDER_KEY" \
+  --model "my-model" \
+  --base-url "https://llm.example.com/v1"
+```
+
+For a custom provider ID, first add it to `packages/cli/src/providers.ts`; the built-in command intentionally rejects unknown presets so a typo cannot silently send a key to the wrong endpoint.
+
+Send a prompt through the active provider:
+
+```bash
+node packages/cli/dist/index.js ai \
+  --provider openrouter \
+  --model anthropic/claude-3.5-sonnet \
+  --prompt "Act as Dazzle's senior design director. Explain the best landing-page direction for an AI research product aimed at product leaders."
+```
+
+Provider management commands:
+
+```bash
+dazzle providers list
+dazzle providers add <provider>
+dazzle providers use <provider>
+dazzle providers remove <provider>
+dazzle ai --prompt "Write a premium hero section for a coffee brand."
+```
+
+Anthropic uses its native Messages API; the other presets use the common OpenAI-compatible `/chat/completions` contract. The provider layer is separate from the deterministic Dazzle renderer, so model output can help with strategy and copy while generated HTML remains validated by Dazzle's composition contract.
+
 ## MCP setup
 
 Build the server and point Claude Code, Cursor, or another MCP client at `packages/mcp/dist/server.js`:

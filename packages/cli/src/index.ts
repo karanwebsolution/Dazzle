@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { confirm, isCancel, multiselect, outro, select, text } from "@clack/prompts";
+import { confirm, isCancel, multiselect, outro, password, select, text } from "@clack/prompts";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { designDirector, effectSchema, generateLanding, layoutSchema, lintComposition, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema, type Effect3D, type LandingOptions, type LayoutName, type Section, type StyleName, type ThemeName } from "dazzle-core";
+import { chat, configureProvider, listConfigured, preset, providerPresets, removeProvider, resolveProvider } from "./providers.js";
 
 const program = new Command();
 program.name("dazzle").description("Build any beautiful landing page from a clear creative brief.").version("0.2.0");
@@ -75,6 +76,20 @@ program.command("redesign").description("redesign a brief with strategy-first de
   .option("--tone <text>", "creative direction")
   .option("-o, --output <file>", "output HTML file", "redesigned.html")
   .action(async (opts: { brand: string; product: string; audience?: string; goal?: string; tone?: string; output: string }) => { const result = redesignLanding(opts); await writeFile(resolve(opts.output), result.html); console.log(`Generated ${resolve(opts.output)}\n\nDesign strategy:\n${result.strategy.summary}`); });
+
+const providers = program.command("providers").description("configure model providers and API keys");
+providers.command("list").description("list provider presets and configuration status").action(async () => { for (const item of await listConfigured()) console.log(`${item.active ? "*" : " "} ${item.preset.id.padEnd(12)} ${item.config?.apiKey || process.env[item.preset.envKey] ? "configured" : "not configured"}  ${item.preset.baseUrl}  ${item.preset.defaultModel}`); });
+providers.command("add").argument("[provider]", `provider id (${providerPresets.map((item) => item.id).join(", ")})`).option("-k, --api-key <key>", "API key (prefer an environment variable or interactive prompt)").option("-m, --model <model>", "default model").option("--base-url <url>", "custom OpenAI-compatible base URL").action(async (providerId: string | undefined, opts: { apiKey?: string; model?: string; baseUrl?: string }) => { const id = providerId || String(await select({ message: "Choose a model provider", options: providerPresets.map((item) => ({ value: item.id, label: `${item.label} — ${item.id}` })) })); const p = preset(id); const key = opts.apiKey || process.env[p.envKey] || String(await password({ message: `${p.label} API key (stored locally with restricted permissions)` })); if (isCancel(key)) process.exit(0); await configureProvider({ provider: id, apiKey: key, model: opts.model, baseUrl: opts.baseUrl }); console.log(`Saved ${p.label}. Active model: ${opts.model || p.defaultModel}`); });
+providers.command("remove").argument("<provider>").description("remove a locally stored provider key").action(async (id: string) => { await removeProvider(id); console.log(`Removed local credentials for ${id}`); });
+providers.command("use").argument("<provider>").description("set an already configured provider as active").action(async (id: string) => { const current = await resolveProvider(id); await configureProvider({ provider: id, model: current.model, baseUrl: current.baseUrl, apiKey: current.apiKey }); console.log(`Active provider: ${current.preset.label} (${current.model})`); });
+
+program.command("ai").description("send a design or copy prompt through a configured model provider")
+  .requiredOption("-p, --prompt <text>", "prompt to send")
+  .option("--provider <provider>", "provider id")
+  .option("--model <model>", "model override")
+  .option("--system <text>", "system instruction")
+  .option("--temperature <number>", "sampling temperature", "0.7")
+  .action(async (opts: { prompt: string; provider?: string; model?: string; system?: string; temperature: string }) => { try { console.log(await chat({ ...opts, temperature: Number(opts.temperature) })); } catch (error) { console.error(`✗ ${error instanceof Error ? error.message : String(error)}`); process.exitCode = 1; } });
 
 program.command("lint").argument("<file>").description("validate composition metadata and seekable motion").action(async (file: string) => { const errors = lintComposition(await readFile(resolve(file), "utf8")); if (errors.length) { console.error(errors.map((x) => `✗ ${x}`).join("\n")); process.exitCode = 1; } else console.log("✓ Composition is valid"); });
 program.command("themes").action(() => listThemes().forEach((t) => console.log(`${t.name.padEnd(10)} ${t.accent}  ${t.background}`)));
