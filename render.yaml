@@ -1,10 +1,10 @@
 services:
   - type: web
     name: dazzle-mcp
-    runtime: node
+    runtime: docker
     plan: free
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
-    startCommand: node packages/mcp/dist/server.js
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: MCP_TRANSPORT

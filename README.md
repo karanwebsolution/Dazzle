@@ -137,7 +137,9 @@ Build the server and point Claude Code, Cursor, or another MCP client at `packag
 
 The `dazzle_generate_landing` tool accepts a complete brief: brand, tagline, description, audience, creative direction, style, layout, theme, custom colors, effect, ordered sections, custom features/stats/FAQs/testimonial, CTA labels/links, and composition settings.
 
-The MCP server also exposes `dazzle_list_styles`, `dazzle_list_themes`, `dazzle_list_sections`, `dazzle_preview_url`, and `dazzle_render_video`.
+The MCP server includes **49 tools** across brief analysis, audience psychology, conversion, visual direction, typography, layout, sections, media selection, Three.js, Remotion, HyperFrames, accessibility, responsive QA, Chromium screenshots, FFmpeg/ffprobe inspection, frame extraction, composition validation, and redesign planning. The original `dazzle_generate_landing`, catalog, preview, and render tools remain available.
+
+See the complete operating playbook in [`SKILLS.md`](SKILLS.md). It defines 46 reusable creative skills and the mandatory render → inspect → revise workflow.
 
 ## AI Design Director and redesign mode
 
@@ -160,6 +162,20 @@ Use Dazzle's design director to redesign this landing page from scratch. First a
 
 The assistant should call `dazzle_design_director` first when you want to inspect the reasoning, or `dazzle_redesign_landing` when you want strategy and generated HTML in one workflow.
 
+### Visual verification before submission
+
+Dazzle's server, not the connected chat model, owns the expensive local tooling:
+
+1. `dazzle_render_screenshot` captures the actual URL or HTML with headless Chromium.
+2. `dazzle_ffmpeg_probe` inspects media metadata.
+3. `dazzle_ffmpeg_extract_frames` extracts representative video frames.
+4. `dazzle_visual_audit` creates a pre-submit page audit and points the model to the rendered asset.
+5. `dazzle_validate_composition` checks the deterministic timeline contract.
+
+Claude/Gemini then use their vision and design judgment to inspect the screenshot or extracted frames. FFmpeg itself does not understand whether a page is beautiful; it supplies real rendered frames so the model can critique what was actually built instead of trusting source HTML. Remotion and HyperFrames are supported as frame-accurate planning/export targets, not as substitutes for visual inspection.
+
+For an existing website, pass its HTTPS URL to `dazzle_render_screenshot` or `dazzle_visual_audit`, capture the target at the same viewport as the redesign, then run `dazzle_redesign_plan` and compare both rendered images before approval.
+
 ## Deploy a public MCP on Render
 
 This repository includes [`render.yaml`](render.yaml), so you can deploy the MCP server directly from the Dazzle repo:
@@ -168,7 +184,7 @@ For a phone-only walkthrough with every Render and Claude mobile screen step, se
 
 1. Open **Render → New → Blueprint**.
 2. Select `karanwebsolution/Dazzle` and the `main` branch.
-3. Render will read `render.yaml`, install dependencies, build the monorepo, and start the HTTP MCP server.
+3. Render will read `render.yaml` and build [`Dockerfile`](Dockerfile). The image explicitly installs FFmpeg, ffprobe, and headless Chromium before starting the HTTP MCP server, so visual audits do not depend on whatever happens to be installed in a generic Node runtime.
 4. Set a strong value for the `MCP_API_KEY` secret when Render asks for it.
 
 After deployment, your public endpoints are:

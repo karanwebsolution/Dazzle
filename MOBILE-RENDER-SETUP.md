@@ -83,13 +83,13 @@ Production में इस example value को copy न करें। अप
 
 7. **Apply** या **Create Blueprint** दबाएं।
 
-Render automatically यह settings use करेगा:
+Render repository के `Dockerfile` से deploy होगा। इसमें FFmpeg, ffprobe और headless Chromium पहले से install हैं, इसलिए screenshot, video-frame extraction और visual audit server-side Render पर चलेंगे। Render automatically यह settings use करेगा:
 
 ```text
-Build Command:
-corepack enable && pnpm install --frozen-lockfile && pnpm build
+Dockerfile:
+./Dockerfile
 
-Start Command:
+Container command:
 node packages/mcp/dist/server.js
 
 Environment:
@@ -104,21 +104,21 @@ Mobile में **New → Web Service** चुनें। फिर:
 ```text
 Repository: karanwebsolution/Dazzle
 Branch: main
-Runtime: Node
+Runtime: Docker
 Root Directory: blank
 Plan: Free
 ```
 
-Build Command:
+Dockerfile Path:
 
 ```bash
-corepack enable && pnpm install --frozen-lockfile && pnpm build
+./Dockerfile
 ```
 
-Start Command:
+Docker Context:
 
 ```bash
-node packages/mcp/dist/server.js
+.
 ```
 
 Environment variables में add करें:
@@ -294,7 +294,8 @@ Render Free service कुछ समय inactive रहने पर sleep ह�
 [ ] GitHub repository: karanwebsolution/Dazzle
 [ ] Render Blueprint deployed
 [ ] Build successful
-[ ] Start command: node packages/mcp/dist/server.js
+[ ] Dockerfile deployed with FFmpeg + Chromium
+[ ] Container command: node packages/mcp/dist/server.js
 [ ] MCP_TRANSPORT=http
 [ ] MCP_API_KEY set
 [ ] /health returns status ok

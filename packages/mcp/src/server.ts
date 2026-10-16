@@ -6,6 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { designDirector, effectSchema, generateLanding, layoutSchema, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema } from "dazzle-core";
+import { registerCreativeTools } from "./creative-tools.js";
 
 const featureSchema = z.object({ title: z.string(), description: z.string(), icon: z.string().optional() });
 const statSchema = z.object({ value: z.string(), label: z.string() });
@@ -48,6 +49,7 @@ function registerTools(server: McpServer): void {
   server.tool("dazzle_list_sections", "List all supported landing page sections", {}, async () => ({ content: [{ type: "text", text: JSON.stringify(listSections()) }] }));
   server.tool("dazzle_preview_url", "Return a local preview URL for a generated HTML file", { file: z.string(), port: z.number().int().positive().optional() }, async ({ port: previewPort = 3000, file }) => ({ content: [{ type: "text", text: `http://localhost:${previewPort}/?file=${encodeURIComponent(file)}` }] }));
   server.tool("dazzle_render_video", "Describe a video render request for an optional HyperFrames integration", { file: z.string(), output: z.string(), fps: z.number().default(30), width: z.number().default(1920), height: z.number().default(1080), duration: z.number().default(10) }, async (args) => ({ content: [{ type: "text", text: `Render requested for ${args.file} → ${args.output} (${args.width}x${args.height}, ${args.fps}fps, ${args.duration}s). Install HyperFrames and ffmpeg to execute renders.` }] }));
+  registerCreativeTools(server);
 }
 
 function origin(req: IncomingMessage): string { return `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers.host ?? "localhost:" + port}`; }
