@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"; import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"; import { z } from "zod"; import { generateLanding, listThemes, type Effect3D, type Section } from "dazzle-core";
+const server=new McpServer({name:"dazzle-mcp",version:"0.1.0"});
+server.tool("dazzle_generate_landing","Generate a self-contained, seekable landing page",{brand:z.string(),tagline:z.string(),primaryColor:z.string().optional(),sections:z.array(z.enum(["hero","features","pricing","cta","testimonials","footer"])).optional(),effect3d:z.enum(["particles","cube","wave","gradient","none"]).optional() },async(args)=>({content:[{type:"text",text:generateLanding({...args,effect3d:args.effect3d as Effect3D,sections:args.sections as Section[]})}]}));
+server.tool("dazzle_list_themes","List available color themes",{},async()=>({content:[{type:"text",text:JSON.stringify(listThemes(),null,2)}]}));
+server.tool("dazzle_preview_url","Return a local preview URL for a file",{file:z.string(),port:z.number().optional()},async({port=3000,file})=>({content:[{type:"text",text:`http://localhost:${port}/?file=${encodeURIComponent(file)}`}]}));
+server.tool("dazzle_render_video","Describe a video render request",{file:z.string(),output:z.string(),fps:z.number().default(30),width:z.number().default(1920),height:z.number().default(1080),duration:z.number().default(10)},async(args)=>({content:[{type:"text",text:`Render queued for ${args.file} → ${args.output} (${args.width}x${args.height}, ${args.fps}fps, ${args.duration}s). Install HyperFrames and ffmpeg to execute renders.`}]}));
+await server.connect(new StdioServerTransport());
