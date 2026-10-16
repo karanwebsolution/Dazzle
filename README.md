@@ -205,7 +205,7 @@ You do **not** need to send a long system instruction. The MCP server now publis
 Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. Local desktop, Render, and Railway modes expose the full catalog. Keep the primary `dazzle` tool as the normal entrypoint:
 
 ```bash
-DAZZLE_SHOW_ALL_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true MCP_PUBLIC=true MCP_ENABLE_OAUTH=true node packages/mcp/dist/server.js
+DAZZLE_SHOW_ALL_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true MCP_PUBLIC=true node packages/mcp/dist/server.js
 ```
 
 This keeps the production connector simple while preserving the full internal capability set.
@@ -235,7 +235,6 @@ Railway is a secondary HTTP hosting option. The repository includes [`railway.js
 ```text
 MCP_TRANSPORT=http
 MCP_PUBLIC=true
-MCP_ENABLE_OAUTH=true
 DAZZLE_SHOW_ALL_TOOLS=true
 DAZZLE_EXPOSE_LEGACY_TOOLS=true
 CHROMIUM_PATH=/usr/bin/chromium
@@ -284,11 +283,11 @@ Health: https://YOUR-SERVICE.onrender.com/health
 MCP:    https://YOUR-SERVICE.onrender.com/mcp
 ```
 
-The public server uses Streamable HTTP with OAuth 2.1 + PKCE for HTTPS connectors. The OAuth sign-in page requires `MCP_API_KEY`. Local stdio and local HTTP mode do not require or use OAuth because OAuth is enabled only when `RENDER=true` or `MCP_PUBLIC=true`. The Render service automatically listens on Render's `PORT`.
+The public server uses Streamable HTTP with OAuth 2.1 + PKCE for HTTPS connectors. OAuth is automatic whenever `RENDER=true` or `MCP_PUBLIC=true`; there is no public OAuth toggle to misconfigure. The OAuth sign-in page requires `MCP_API_KEY`. Local stdio and local HTTP mode do not require or expose OAuth. The Render service automatically listens on Render's `PORT`.
 
 For Claude web/mobile, open **Settings → Connectors → Add custom connector**, use the public `/mcp` URL, complete the Dazzle OAuth sign-in page, and enter the private `MCP_API_KEY`. Local Claude Code/Cursor uses stdio and will not show this sign-in flow.
 
-OAuth endpoints are enabled only on public deployments when `MCP_ENABLE_OAUTH=true`. Local stdio/local HTTP mode does not expose them. The API-key header remains supported for clients that do not implement OAuth.
+OAuth endpoints are enabled automatically on public deployments and are absent from local mode. The API-key header remains supported for clients that do not implement OAuth.
 
 ### Finding `MCP_API_KEY` in Render
 
