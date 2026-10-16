@@ -1,0 +1,2 @@
+import { describe, expect, it } from "vitest"; import { generateLanding, lintComposition, listThemes } from "../src/index.js";
+describe("Dazzle generator",()=>{it("generates a valid composition",()=>{const html=generateLanding({brand:"Acme",tagline:"Ship faster",effect3d:"cube"});expect(html).toContain('data-composition-id');expect(lintComposition(html)).toEqual([]);});it("supports themes",()=>expect(listThemes()).toHaveLength(3));});
