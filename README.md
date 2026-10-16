@@ -1,35 +1,50 @@
 # Dazzle
 
-> Landing pages. 3D. Video. One command.
+> Landing pages. 3D. Video. One clear creative brief.
 
-Dazzle is an open-source TypeScript monorepo for generating accessible, self-contained landing-page compositions with seekable animation timelines and optional 3D effects.
+Dazzle creates **specific, polished, responsive landing pages** from the terminal or an MCP-connected assistant. It is not a random template picker: you control the story, style, layout, palette, sections, copy, CTA, audience, and motion.
 
 ## Quick start
 
 ```bash
 pnpm install
 pnpm --filter dazzle-cli build
-node packages/cli/dist/index.js init demo
-node packages/cli/dist/index.js preview demo/landing.html
+node packages/cli/dist/index.js create
 ```
 
-Generate directly:
+The interactive wizard asks for the brand, headline, value proposition, visual language, color mood, motion, sections, layout, accent color, and CTA. Preview the result with:
 
 ```bash
-dazzle create --brand "Acme" --tagline "Build what is next" --effect cube --output landing.html
-dazzle lint landing.html
-dazzle themes
+node packages/cli/dist/index.js preview landing.html
 ```
 
-## Packages
+### Fully scripted generation
 
-- **dazzle-core** — HTML composition generator, themes, and validation.
-- **dazzle-cli** — `init`, `create`, `preview`, `render`, `lint`, and `themes` commands.
-- **dazzle-mcp** — MCP tools for generation, theme discovery, preview URLs, and render requests.
+```bash
+node packages/cli/dist/index.js create \
+  --brand "Northstar" \
+  --tagline "A clearer way forward" \
+  --description "Strategy for ambitious teams that want to move with confidence." \
+  --style editorial \
+  --theme paper \
+  --layout split \
+  --effect gradient \
+  --sections hero,logos,features,showcase,stats,testimonials,faq,cta,footer \
+  --color '#e4572e' \
+  --audience "founders and product teams" \
+  --creative-direction "quiet luxury, warm editorial typography, confident and human" \
+  --cta "Book a conversation" \
+  --cta-href "https://example.com/contact" \
+  --output northstar.html
+```
+
+Available styles: `saas`, `editorial`, `bento`, `glass`, `brutalist`, `luxury`.
+Available themes: `midnight`, `aurora`, `sunset`, `paper`, `mono`.
+Available motion: `particles`, `cube`, `wave`, `gradient`, `none`.
 
 ## MCP setup
 
-Build the server and point your MCP client at `packages/mcp/dist/server.js`:
+Build the server and point Claude Code, Cursor, or another MCP client at `packages/mcp/dist/server.js`:
 
 ```json
 {
@@ -42,11 +57,19 @@ Build the server and point your MCP client at `packages/mcp/dist/server.js`:
 }
 ```
 
+The `dazzle_generate_landing` tool accepts a complete brief: brand, tagline, description, audience, creative direction, style, layout, theme, custom colors, effect, ordered sections, custom features/stats/FAQs/testimonial, CTA labels/links, and composition settings.
+
+The MCP server also exposes `dazzle_list_styles`, `dazzle_list_themes`, `dazzle_list_sections`, `dazzle_preview_url`, and `dazzle_render_video`.
+
 ## Composition contract
 
-Every generated page has a `data-composition-id`, dimensions, duration, and FPS on `#root`. Animated elements are `.clip` nodes with `data-start` and `data-duration`. Timelines are paused and exposed as `window.__timelines`; call `window.__seek(seconds)` to seek.
+Every generated page includes composition metadata on `#root`: `data-composition-id`, dimensions, duration, and FPS. Animated elements are `.clip` nodes with `data-start` and `data-duration`. Timelines are seekable through `window.__timelines` and `window.__seek(seconds)`; no wall-clock animation is used.
 
-Video rendering is intentionally an optional integration: install a compatible HyperFrames engine and FFmpeg, then wire them into the `render` command for your environment.
+## Packages
+
+- **dazzle-core** — configurable design system, HTML generator, themes, sections, and validator.
+- **dazzle-cli** — interactive wizard plus scripted generation and preview commands.
+- **dazzle-mcp** — rich MCP schema for assistants and creative workflows.
 
 ## Development
 
@@ -55,6 +78,8 @@ pnpm lint
 pnpm test
 pnpm build
 ```
+
+Video rendering remains an optional integration: install a compatible HyperFrames engine and FFmpeg, then connect them to the `render` command for your environment.
 
 ## License
 
