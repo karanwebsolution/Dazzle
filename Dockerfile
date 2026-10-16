@@ -1,7 +1,6 @@
 FROM node:22-bookworm-slim
 
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-ENV NODE_ENV=production
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg chromium ca-certificates \
@@ -13,7 +12,9 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 COPY packages ./packages
 
-RUN pnpm install --frozen-lockfile && pnpm build
+RUN pnpm install --frozen-lockfile --prod=false && pnpm build
+
+ENV NODE_ENV=production
 
 ENV MCP_TRANSPORT=http
 EXPOSE 10000
