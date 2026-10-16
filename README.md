@@ -232,6 +232,8 @@ https://dazzle-2yh9.onrender.com/health
 
 The response must contain a non-null `runtime.chromium` (normally `/usr/bin/chromium`) and `runtime.ffmpeg: true`. If Chromium is `null`, the existing Render service is still the old native Node service; create/redeploy from the Docker Blueprint rather than only restarting the old service.
 
+Render's free web service can sleep after inactivity. The first request after sleep may take long enough for a mobile Claude connector to show a timeout; retry once after the service wakes. OAuth access tokens are signed with `MCP_API_KEY`, so a normal container restart no longer invalidates an existing token. A new login is only expected if `MCP_API_KEY` changes, the token expires, or the OAuth client flow itself must be restarted.
+
 After deployment, your public endpoints are:
 
 ```text

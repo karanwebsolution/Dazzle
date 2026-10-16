@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -17,6 +17,7 @@ const apiKey = process.env.MCP_API_KEY;
 const oauthClients = new Map<string, { redirectUris: string[] }>();
 const authorizationCodes = new Map<string, { clientId: string; redirectUri: string; codeChallenge: string; scope: string; expiresAt: number }>();
 const accessTokens = new Map<string, { scope: string; expiresAt: number }>();
+const tokenSecret = apiKey ?? randomToken(32);
 
 function createMcpServer(iconUrl?: string): McpServer {
   const server = new McpServer({
@@ -58,6 +59,8 @@ function registerTools(server: McpServer): void {
 
 function origin(req: IncomingMessage): string { return `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers.host ?? "localhost:" + port}`; }
 function randomToken(bytes = 32): string { return randomBytes(bytes).toString("base64url"); }
+function signedAccessToken(scope: string, expiresAt: number): string { const payload = Buffer.from(JSON.stringify({ scope, expiresAt }), "utf8").toString("base64url"); const signature = createHmac("sha256", tokenSecret).update(payload).digest("base64url"); return `dazzle_${payload}.${signature}`; }
+function verifyAccessToken(value: string): { scope: string; expiresAt: number } | undefined { try { const [prefix, signature] = value.split("."); if (!prefix?.startsWith("dazzle_") || !signature) return undefined; const payload = prefix.slice("dazzle_".length); const expected = createHmac("sha256", tokenSecret).update(payload).digest("base64url"); if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return undefined; const record = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { scope: string; expiresAt: number }; return record.expiresAt > Date.now() ? record : undefined; } catch { return undefined; } }
 function htmlEscape(value: string): string { return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c] ?? c)); }
 function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void { res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }); res.end(JSON.stringify(body)); }
 function readBody(req: IncomingMessage): Promise<string> { return new Promise((resolve, reject) => { let data = ""; req.setEncoding("utf8"); req.on("data", (chunk: string) => { data += chunk; if (data.length > 2_000_000) reject(new Error("Request body too large")); }); req.on("end", () => resolve(data)); req.on("error", reject); }); }
@@ -65,7 +68,7 @@ function authorized(req: IncomingMessage): boolean {
   const value = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : undefined);
   if (!value) return false;
   if (apiKey && value === apiKey) return true;
-  const token = accessTokens.get(value);
+  const token = verifyAccessToken(value) ?? accessTokens.get(value);
   return Boolean(token && token.expiresAt > Date.now());
 }
 function pkceChallenge(verifier: string): string { return createHash("sha256").update(verifier).digest("base64url"); }
@@ -108,7 +111,7 @@ async function handleOAuth(req: IncomingMessage, res: ServerResponse, path: stri
     const form = new URLSearchParams(await readBody(req)); const record = authorizationCodes.get(form.get("code") ?? ""); const client = oauthClients.get(form.get("client_id") ?? "");
     if (!record || !client || record.expiresAt < Date.now() || record.clientId !== form.get("client_id") || record.redirectUri !== form.get("redirect_uri")) { json(res, 400, { error: "invalid_grant" }); return; }
     if (record.codeChallenge && pkceChallenge(form.get("code_verifier") ?? "") !== record.codeChallenge) { json(res, 400, { error: "invalid_grant", error_description: "PKCE verification failed" }); return; }
-    authorizationCodes.delete(form.get("code") ?? ""); const token = randomToken(); accessTokens.set(token, { scope: record.scope, expiresAt: Date.now() + 30 * 24 * 60 * 60_000 }); json(res, 200, { access_token: token, token_type: "Bearer", expires_in: 30 * 24 * 60 * 60, scope: record.scope }); return;
+    authorizationCodes.delete(form.get("code") ?? ""); const expiresAt = Date.now() + 30 * 24 * 60 * 60_000; const token = signedAccessToken(record.scope, expiresAt); json(res, 200, { access_token: token, token_type: "Bearer", expires_in: 30 * 24 * 60 * 60, scope: record.scope }); return;
   }
   json(res, 404, { error: "OAuth endpoint not found", base });
 }
