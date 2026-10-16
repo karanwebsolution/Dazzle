@@ -224,6 +224,14 @@ For a phone-only walkthrough with every Render and Claude mobile screen step, se
 3. Render will read `render.yaml` and build [`Dockerfile`](Dockerfile). The image explicitly installs FFmpeg, ffprobe, and headless Chromium before starting the HTTP MCP server, so visual audits do not depend on whatever happens to be installed in a generic Node runtime.
 4. Set a strong value for the `MCP_API_KEY` secret when Render asks for it.
 
+After deployment, verify the runtime before reconnecting Claude:
+
+```text
+https://dazzle-2yh9.onrender.com/health
+```
+
+The response must contain a non-null `runtime.chromium` (normally `/usr/bin/chromium`) and `runtime.ffmpeg: true`. If Chromium is `null`, the existing Render service is still the old native Node service; create/redeploy from the Docker Blueprint rather than only restarting the old service.
+
 After deployment, your public endpoints are:
 
 ```text

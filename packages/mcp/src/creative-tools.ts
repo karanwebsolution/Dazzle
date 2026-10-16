@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -73,7 +74,14 @@ function specialist(name: string, args: Brief): unknown {
 async function screenshot(target: string, outputPath: string, width: number, height: number): Promise<string> {
   await mkdir(outputPath.substring(0, outputPath.lastIndexOf("/")), { recursive: true });
   const url = /^https?:\/\//.test(target) ? target : `file://${target}`;
-  await exec("chromium", ["--headless", "--no-sandbox", "--disable-gpu", `--window-size=${width},${height}`, `--screenshot=${outputPath}`, url], { timeout: 120_000 });
+  const candidates = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome", "chromium"].filter(Boolean) as string[];
+  let binary: string | undefined;
+  for (const candidate of candidates) {
+    if (candidate.startsWith("/") && existsSync(candidate)) { binary = candidate; break; }
+    if (!candidate.startsWith("/")) { try { const found = await exec("sh", ["-lc", `command -v ${candidate}`]); if (found.stdout.trim()) { binary = found.stdout.trim(); break; } } catch { /* try next candidate */ } }
+  }
+  if (!binary) throw new Error("Dazzle visual runtime unavailable: Chromium was not found. Deploy the repository Dockerfile on Render or set CHROMIUM_PATH to an installed Chromium binary.");
+  await exec(binary, ["--headless", "--no-sandbox", "--disable-gpu", `--window-size=${width},${height}`, `--screenshot=${outputPath}`, url], { timeout: 120_000 });
   return outputPath;
 }
 async function ffprobe(input: string): Promise<unknown> { const result = await exec("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", input], { timeout: 60_000 }); return JSON.parse(result.stdout); }
