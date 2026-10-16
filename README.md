@@ -205,7 +205,7 @@ You do **not** need to send a long system instruction. The MCP server now publis
 Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. Local desktop, Render, and Railway modes expose the full catalog. Keep the primary `dazzle` tool as the normal entrypoint:
 
 ```bash
-DAZZLE_SHOW_ALL_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true MCP_PUBLIC=true MCP_ENABLE_OAUTH=false node packages/mcp/dist/server.js
+DAZZLE_SHOW_ALL_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true MCP_PUBLIC=true MCP_ENABLE_OAUTH=true node packages/mcp/dist/server.js
 ```
 
 This keeps the production connector simple while preserving the full internal capability set.
@@ -235,7 +235,7 @@ Railway is a secondary HTTP hosting option. The repository includes [`railway.js
 ```text
 MCP_TRANSPORT=http
 MCP_PUBLIC=true
-MCP_ENABLE_OAUTH=false
+MCP_ENABLE_OAUTH=true
 DAZZLE_SHOW_ALL_TOOLS=true
 DAZZLE_EXPOSE_LEGACY_TOOLS=true
 CHROMIUM_PATH=/usr/bin/chromium
@@ -256,7 +256,7 @@ The health response must show `authentication: "api-key"`, `oauth: false`, `runt
 
 ## Optional public MCP deployment: Render
 
-Render is a secondary option for mobile or remote Claude users. It is not required for the main desktop workflow. The Render Free plan can sleep after inactivity and may cause a cold-start timeout; use a paid always-on plan for reliable long-running MCP sessions. Public access is API-key-only: OAuth is disabled, and requests must send `Authorization: Bearer <MCP_API_KEY>` or `x-api-key: <MCP_API_KEY>`.
+Render is a secondary option for mobile or remote Claude users. It is not required for the main desktop workflow. The Render Free plan can sleep after inactivity and may cause a cold-start timeout; use a paid always-on plan for reliable long-running MCP sessions. Public HTTPS connectors use OAuth, and the Dazzle sign-in page still requires the private `MCP_API_KEY` before issuing a token.
 
 This repository includes [`render.yaml`](render.yaml), so you can deploy the MCP server directly from the Dazzle repo:
 
@@ -275,7 +275,7 @@ https://YOUR-SERVICE.onrender.com/health
 
 The response must contain a non-null `runtime.chromium` (normally `/usr/bin/chromium`) and `runtime.ffmpeg: true`. If Chromium is `null`, the existing Render service is still the old native Node service; create/redeploy from the Docker Blueprint rather than only restarting the old service.
 
-Render's free web service can sleep after inactivity. The first request after sleep may take long enough for a mobile Claude connector to show a timeout; retry once after the service wakes. The API key is checked on every request; it is not shared with anonymous users.
+Render's free web service can sleep after inactivity. The first request after sleep may take long enough for a mobile Claude connector to show a timeout; retry once after the service wakes. OAuth access is still gated by `MCP_API_KEY`; the key is not shared with anonymous users.
 
 After deployment, your public endpoints are:
 
@@ -284,11 +284,11 @@ Health: https://YOUR-SERVICE.onrender.com/health
 MCP:    https://YOUR-SERVICE.onrender.com/mcp
 ```
 
-The public server uses Streamable HTTP and API-key authentication. OAuth endpoints are disabled in the Render and Railway configurations. Local stdio and local HTTP mode also do not require or use OAuth. The Render service automatically listens on Render's `PORT`.
+The public server uses Streamable HTTP with OAuth 2.1 + PKCE for HTTPS connectors. The OAuth sign-in page requires `MCP_API_KEY`. Local stdio and local HTTP mode do not require or use OAuth because OAuth is enabled only when `RENDER=true` or `MCP_PUBLIC=true`. The Render service automatically listens on Render's `PORT`.
 
-Claude clients that support custom request headers can connect with `x-api-key: <MCP_API_KEY>`. If a Claude mobile custom connector insists on OAuth, it cannot use this API-key-only mode; use local Claude Code/Cursor on desktop, or temporarily enable OAuth explicitly with `MCP_ENABLE_OAUTH=true`.
+For Claude web/mobile, open **Settings → Connectors → Add custom connector**, use the public `/mcp` URL, complete the Dazzle OAuth sign-in page, and enter the private `MCP_API_KEY`. Local Claude Code/Cursor uses stdio and will not show this sign-in flow.
 
-When OAuth is disabled, the OAuth endpoints return 404. The supported authentication headers are `Authorization: Bearer <MCP_API_KEY>` and `x-api-key: <MCP_API_KEY>`.
+OAuth endpoints are enabled only on public deployments when `MCP_ENABLE_OAUTH=true`. Local stdio/local HTTP mode does not expose them. The API-key header remains supported for clients that do not implement OAuth.
 
 ### Finding `MCP_API_KEY` in Render
 

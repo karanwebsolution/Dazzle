@@ -12,7 +12,7 @@ services:
       - key: MCP_PUBLIC
         value: "true"
       - key: MCP_ENABLE_OAUTH
-        value: "false"
+        value: "true"
       - key: DAZZLE_SHOW_ALL_TOOLS
         value: "true"
       - key: DAZZLE_EXPOSE_LEGACY_TOOLS
