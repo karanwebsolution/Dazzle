@@ -182,6 +182,23 @@ Call `dazzle_build` instead of manually asking the model to select 49 specialist
 
 The `dazzle_capabilities` tool exposes this ownership contract to any connected client.
 
+### Automatic routing for normal messages
+
+You do **not** need to send a long system instruction. The MCP server now publishes initialization instructions and a clearly named primary tool, `dazzle`. Its description matches ordinary requests such as:
+
+- “Use Dazzle to make a landing page for my startup.”
+- “Redesign this website and make it more premium.”
+- “Make this page beautiful, animated, and conversion-focused.”
+- “Turn this idea into a real responsive website.”
+
+Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. The 41 specialist diagnostic tools are hidden from the normal public tool list so they do not compete for model attention. For debugging or development, expose them explicitly with:
+
+```bash
+DAZZLE_EXPOSE_SPECIALIST_TOOLS=true node packages/mcp/dist/server.js
+```
+
+This keeps the production connector simple while preserving the full internal capability set.
+
 ### Visual verification before submission
 
 Dazzle's server, not the connected chat model, owns the expensive local tooling:

@@ -23,7 +23,7 @@ function createMcpServer(iconUrl?: string): McpServer {
     websiteUrl: "https://github.com/karanwebsolution/Dazzle",
     description: "Beautiful, configurable landing pages from CLI or MCP.",
     icons: iconUrl ? [{ src: iconUrl, mimeType: "image/svg+xml", sizes: ["any"], theme: "dark" }] : undefined
-  });
+  }, { instructions: "Dazzle is a complete landing-page and redesign engine, not a question-answering reference. When a user asks to use Dazzle, create or redesign a website, make a landing page, improve visual quality, add animation, or turn an idea into a real page, call the primary `dazzle` tool immediately. Translate the normal-language request into brand, product, audience, goal, tone, operation, and targetUrl when relevant. Do not make the user provide system instructions. Do not manually orchestrate specialist tools: Dazzle runs strategy, generation, Chromium rendering, validation, FFmpeg-ready media artifacts, and screenshot attachment itself. After the tool returns images, inspect them and call `dazzle` again with a revised brief if the visual result is weak. Use specialist diagnostics only when DAZZLE_EXPOSE_SPECIALIST_TOOLS=true or when debugging." });
   registerTools(server);
   return server;
 }
