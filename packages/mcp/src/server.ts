@@ -6,7 +6,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { designDirector, effectSchema, fontSchema, generateLanding, iconStyleSchema, layoutSchema, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema, visualVariantSchema } from "dazzle-core";
-import { registerCreativeTools } from "./creative-tools.js";
+import { executeDazzlePipeline, pipelineOutput, registerCreativeTools } from "./creative-tools.js";
 
 const featureSchema = z.object({ title: z.string(), description: z.string(), icon: z.string().optional() });
 const statSchema = z.object({ value: z.string(), label: z.string() });
@@ -35,10 +35,12 @@ function registerTools(server: McpServer): void {
     audience: z.string().optional().describe("Who will visit this page"),
     goal: z.string().optional().describe("Desired visitor action: signup, demo, sale, booking, download, or inquiry"),
     tone: z.string().optional().describe("Desired feeling or creative direction"),
-    existingHtml: z.string().optional().describe("Existing landing HTML or a concise description of the current page to improve")
+    existingHtml: z.string().optional().describe("Existing landing HTML or a concise description of the current page to improve"),
+    targetUrl: z.string().url().optional().describe("Existing public page URL to capture before redesign")
   };
-  server.tool("dazzle_design_director", "Think through a landing page before generating it. Analyze audience intent, trust barriers, cognitive load, CTA psychology, typography, palette, cards, sections, motion, graphics, image/video/Three.js moments, accessibility, and reduced-motion behavior. Return a structured design strategy that can be passed to dazzle_generate_landing.", strategyInput, async (args) => ({ content: [{ type: "text", text: JSON.stringify(designDirector(args), null, 2) }] }));
-  server.tool("dazzle_redesign_landing", "Redesign an existing landing page or product idea into a more conversational, animated, professional, and conversion-aware experience. First make design decisions, then return the strategy and complete HTML.", strategyInput, async (args) => { const result = redesignLanding(args); return { content: [{ type: "text", text: JSON.stringify({ strategy: result.strategy, html: result.html }, null, 2) }] }; });
+  if (process.env.DAZZLE_EXPOSE_LEGACY_TOOLS === "true") {
+  server.tool("dazzle_design_director", "Legacy diagnostic. Prefer the primary dazzle tool for any real build.", strategyInput, async (args) => ({ content: [{ type: "text", text: JSON.stringify(designDirector(args), null, 2) }] }));
+  server.tool("dazzle_redesign_landing", "Legacy alias routed through the complete Dazzle orchestrator. Prefer the primary dazzle tool.", strategyInput, async (args) => pipelineOutput(await executeDazzlePipeline({ ...args, operation: "redesign", outputDir: "/tmp/dazzle-legacy-redesign", width: 1440, height: 1000 })));
   server.tool("dazzle_generate_landing", "Create a polished, responsive landing page from a complete creative brief. Use the style, layout, sections, copy, audience, and color controls to make the result specific rather than generic.", {
     brand: z.string().min(1).describe("Brand, company, product, or event name"), tagline: z.string().min(1).describe("Hero headline or central promise"), description: z.string().optional(), eyebrow: z.string().optional(), audience: z.string().optional(), creativeDirection: z.string().optional(),
     style: styleSchema.optional().describe("saas, editorial, bento, glass, brutalist, or luxury"), layout: layoutSchema.optional(), theme: themeSchema.optional(), fontPreset: fontSchema.optional().describe("sora, manrope, space-grotesk, instrument-serif, fraunces, or dm-sans"), iconStyle: iconStyleSchema.optional().describe("line, solid, geometric, editorial, or minimal"), visualVariant: visualVariantSchema.optional().describe("soft-tech, editorial-grid, neo-brutal, quiet-luxury, organic-flow, or mono-lab"), primaryColor: z.string().optional(), backgroundColor: z.string().optional(), effect3d: effectSchema.optional(), sections: z.array(sectionSchema).optional().describe(`Supported: ${listSections().join(", ")}`),
@@ -49,6 +51,7 @@ function registerTools(server: McpServer): void {
   server.tool("dazzle_list_sections", "List all supported landing page sections", {}, async () => ({ content: [{ type: "text", text: JSON.stringify(listSections()) }] }));
   server.tool("dazzle_preview_url", "Return a local preview URL for a generated HTML file", { file: z.string(), port: z.number().int().positive().optional() }, async ({ port: previewPort = 3000, file }) => ({ content: [{ type: "text", text: `http://localhost:${previewPort}/?file=${encodeURIComponent(file)}` }] }));
   server.tool("dazzle_render_video", "Describe a video render request for an optional HyperFrames integration", { file: z.string(), output: z.string(), fps: z.number().default(30), width: z.number().default(1920), height: z.number().default(1080), duration: z.number().default(10) }, async (args) => ({ content: [{ type: "text", text: `Render requested for ${args.file} → ${args.output} (${args.width}x${args.height}, ${args.fps}fps, ${args.duration}s). Install HyperFrames and ffmpeg to execute renders.` }] }));
+  }
   registerCreativeTools(server);
 }
 

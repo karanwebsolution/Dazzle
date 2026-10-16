@@ -137,13 +137,13 @@ Build the server and point Claude Code, Cursor, or another MCP client at `packag
 
 The `dazzle_generate_landing` tool accepts a complete brief: brand, tagline, description, audience, creative direction, style, layout, theme, custom colors, effect, ordered sections, custom features/stats/FAQs/testimonial, CTA labels/links, and composition settings.
 
-The MCP server includes **49 tools** across brief analysis, audience psychology, conversion, visual direction, typography, layout, sections, media selection, Three.js, Remotion, HyperFrames, accessibility, responsive QA, Chromium screenshots, FFmpeg/ffprobe inspection, frame extraction, composition validation, and redesign planning. The original `dazzle_generate_landing`, catalog, preview, and render tools remain available.
+The MCP server contains the full internal creative engine, but production exposes only three public tools: `dazzle`, `dazzle_build`, and `dazzle_capabilities`. This prevents model tool-selection drift. Specialist, media, and legacy generation tools remain available only in diagnostics mode.
 
 See the complete operating playbook in [`SKILLS.md`](SKILLS.md). It defines 46 reusable creative skills and the mandatory render → inspect → revise workflow.
 
 ## AI Design Director and redesign mode
 
-Dazzle can now think through a page before generating it. The `dazzle_design_director` tool turns a product brief into a structured design strategy covering:
+Dazzle can now think through a page before generating it. Its internal design director turns a product brief into a structured design strategy covering:
 
 - audience intent, awareness, trust barriers, and visitor psychology
 - visual style, theme, layout, typography, palette, radius, and density
@@ -152,7 +152,7 @@ Dazzle can now think through a page before generating it. The `dazzle_design_dir
 - where an image, video, CSS art, or Three.js moment is useful—and where it would be noise
 - must-have, should-have, and optional sections with a reason for each
 
-The `dazzle_redesign_landing` tool performs the next step: it makes those decisions and returns a complete redesigned HTML page plus the strategy that explains it. Use it for an existing HTML page, a rough description, or a page that needs a more conversational, animated, professional, and conversion-aware direction.
+The production `dazzle` tool performs the next step: it makes those decisions, renders the page, attaches screenshots, and returns the complete managed build manifest. The old `dazzle_redesign_landing` route is hidden in production; if explicitly enabled for debugging, it delegates to the same orchestrator instead of using a legacy one-shot HTML path.
 
 ### Claude prompt for contextual redesign
 
@@ -160,7 +160,7 @@ The `dazzle_redesign_landing` tool performs the next step: it makes those decisi
 Use Dazzle's design director to redesign this landing page from scratch. First analyze the audience, intent, trust barriers, cognitive load, CTA psychology, typography, palette, cards, motion, graphics, image/video/Three.js opportunities, and the sections that should be removed or added. Then generate the final responsive HTML. Product: an AI research workspace called Atlas. Audience: busy product leaders. Goal: start a free trial. Tone: calm, premium, intelligent, human, and memorable. Make it conversational and animated without harming accessibility or readability.
 ```
 
-The assistant should call `dazzle_design_director` first when you want to inspect the reasoning, or `dazzle_redesign_landing` when you want strategy and generated HTML in one workflow.
+For production, call `dazzle`. Use the legacy names only in diagnostics mode.
 
 ### Dazzle Orchestrator: one LLM boundary
 
@@ -178,7 +178,7 @@ user plan → one LLM brief translation → dazzle_build
           → LLM visual review
 ```
 
-Call `dazzle_build` instead of manually asking the model to select 49 specialist tools. The specialist tools remain available for diagnostics and debugging, but they are internal capabilities of the Dazzle engine—not separate agents or a requirement for the user to orchestrate.
+Call `dazzle` or `dazzle_build` instead of manually asking the model to select specialist tools. The specialist tools remain available for diagnostics and debugging, but they are internal capabilities of the Dazzle engine—not separate agents or a requirement for the user to orchestrate.
 
 The `dazzle_capabilities` tool exposes this ownership contract to any connected client.
 
@@ -191,10 +191,10 @@ You do **not** need to send a long system instruction. The MCP server now publis
 - “Make this page beautiful, animated, and conversion-focused.”
 - “Turn this idea into a real responsive website.”
 
-Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. The 41 specialist diagnostic tools are hidden from the normal public tool list so they do not compete for model attention. For debugging or development, expose them explicitly with:
+Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. Production exposes only three tools; all specialist, media, and legacy tools are hidden so they cannot compete for model attention. For debugging or development, expose them explicitly with:
 
 ```bash
-DAZZLE_EXPOSE_SPECIALIST_TOOLS=true node packages/mcp/dist/server.js
+DAZZLE_EXPOSE_DIAGNOSTICS=true DAZZLE_EXPOSE_SPECIALIST_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true node packages/mcp/dist/server.js
 ```
 
 This keeps the production connector simple while preserving the full internal capability set.
