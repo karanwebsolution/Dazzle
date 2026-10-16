@@ -19,6 +19,7 @@ const authorizationCodes = new Map<string, { clientId: string; redirectUri: stri
 const accessTokens = new Map<string, { scope: string; expiresAt: number }>();
 const tokenSecret = apiKey ?? randomToken(32);
 const publicHttp = process.env.RENDER === "true" || process.env.MCP_PUBLIC === "true";
+const oauthEnabled = publicHttp && process.env.MCP_ENABLE_OAUTH === "true";
 
 function createMcpServer(iconUrl?: string): McpServer {
   const server = new McpServer({
@@ -121,11 +122,11 @@ async function startHttp(): Promise<void> {
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`); const path = url.pathname;
     if (req.method === "OPTIONS" && (path === "/mcp" || path.startsWith("/oauth/"))) { res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization, mcp-session-id, x-api-key", "access-control-allow-methods": "GET,POST,DELETE,OPTIONS" }); res.end(); return; }
-    if (path === "/health" && req.method === "GET") { json(res, 200, { status: "ok", name: "dazzle", transport: "streamable-http", oauth: publicHttp, authenticated: publicHttp ? Boolean(apiKey) : true, icon: `${origin(req)}/icon.svg`, runtime: { chromium: [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].filter(Boolean).find((candidate) => existsSync(candidate as string)) ?? null, ffmpeg: existsSync("/usr/bin/ffmpeg") } }); return; }
+    if (path === "/health" && req.method === "GET") { json(res, 200, { status: "ok", name: "dazzle", transport: "streamable-http", authentication: publicHttp ? "api-key" : "none", oauth: oauthEnabled, authenticated: publicHttp ? Boolean(apiKey) : true, icon: `${origin(req)}/icon.svg`, runtime: { chromium: [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].filter(Boolean).find((candidate) => existsSync(candidate as string)) ?? null, ffmpeg: existsSync("/usr/bin/ffmpeg") } }); return; }
     if ((path === "/icon.svg" || path === "/favicon.svg") && (req.method === "GET" || req.method === "HEAD")) { res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*", "content-disposition": "inline" }); if (req.method === "HEAD") { res.end(); return; } res.end(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Dazzle"><title>Dazzle</title><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17152a"/><stop offset="1" stop-color="#08090f"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4b5fd"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="url(#b)"/><circle cx="128" cy="128" r="87" fill="#8b5cf6" opacity=".12"/><path d="M128 25c8 63 40 95 103 103-63 8-95 40-103 103-8-63-40-95-103-103 63-8 95-40 103-103Z" fill="url(#s)"/><circle cx="128" cy="128" r="10" fill="#fff"/></svg>`); return; }
     if (path === "/mcp" && ["GET", "POST", "DELETE"].includes(req.method ?? "")) { void handleMcp(req, res); return; }
-    if (publicHttp && (path.startsWith("/.well-known/") || path.startsWith("/oauth/"))) { void handleOAuth(req, res, path, url); return; }
+    if (oauthEnabled && (path.startsWith("/.well-known/") || path.startsWith("/oauth/"))) { void handleOAuth(req, res, path, url); return; }
     json(res, 404, { error: "Not found", endpoints: ["/health", "/mcp", "/.well-known/oauth-protected-resource", "/oauth/authorize"] });
   });
   httpServer.listen(port, "0.0.0.0", () => console.log(`Dazzle MCP listening on port ${port} at /mcp (OAuth enabled)`));
