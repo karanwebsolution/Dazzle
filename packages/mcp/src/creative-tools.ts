@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { chromium } from "playwright-core";
 import { z } from "zod";
 import { designDirector, generateLanding, lintComposition, type DesignStrategy } from "dazzle-core";
 
@@ -21,7 +22,8 @@ type Brief = { brand: string; product: string; audience?: string; goal?: string;
 const output = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 export async function pipelineOutput(result: any): Promise<{ content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] }> {
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [{ type: "text", text: JSON.stringify(result, null, 2) }];
-  for (const [label, path] of [["generated", result.artifacts.generatedScreenshot], ["target", result.artifacts.targetScreenshot]] as const) {
+  const screenshots: [string, string | undefined][] = [["generated", result.artifacts.generatedScreenshot], ["target full-page", result.artifacts.targetScreenshot], ...(result.artifacts.targetScreenshots ?? []).slice(1).map((path: string, index: number) => [`target segment ${index + 2}`, path] as [string, string])];
+  for (const [label, path] of screenshots) {
     if (!path) continue;
     try { content.push({ type: "image", data: (await readFile(path)).toString("base64"), mimeType: "image/png" }); content.push({ type: "text", text: `${label} screenshot attached above. Inspect it visually before approving.` }); } catch { /* manifest still contains the path */ }
   }
@@ -71,17 +73,24 @@ function specialist(name: string, args: Brief): unknown {
   return map[name] ?? { strategy: s };
 }
 
-async function screenshot(target: string, outputPath: string, width: number, height: number): Promise<string> {
+async function chromiumPath(): Promise<string> {
+  const candidates = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome", "chromium"].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    if (candidate.startsWith("/") && existsSync(candidate)) return candidate;
+    if (!candidate.startsWith("/")) { try { const found = await exec("sh", ["-lc", `command -v ${candidate}`]); if (found.stdout.trim()) return found.stdout.trim(); } catch { /* try next candidate */ } }
+  }
+  throw new Error("Dazzle visual runtime unavailable: Chromium was not found. Deploy the repository Dockerfile on Render or set CHROMIUM_PATH to an installed Chromium binary.");
+}
+async function screenshot(target: string, outputPath: string, width: number, height: number, fullPage = false): Promise<string> {
   await mkdir(outputPath.substring(0, outputPath.lastIndexOf("/")), { recursive: true });
   const url = /^https?:\/\//.test(target) ? target : `file://${target}`;
-  const candidates = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome", "chromium"].filter(Boolean) as string[];
-  let binary: string | undefined;
-  for (const candidate of candidates) {
-    if (candidate.startsWith("/") && existsSync(candidate)) { binary = candidate; break; }
-    if (!candidate.startsWith("/")) { try { const found = await exec("sh", ["-lc", `command -v ${candidate}`]); if (found.stdout.trim()) { binary = found.stdout.trim(); break; } } catch { /* try next candidate */ } }
-  }
-  if (!binary) throw new Error("Dazzle visual runtime unavailable: Chromium was not found. Deploy the repository Dockerfile on Render or set CHROMIUM_PATH to an installed Chromium binary.");
-  await exec(binary, ["--headless", "--no-sandbox", "--disable-gpu", `--window-size=${width},${height}`, `--screenshot=${outputPath}`, url], { timeout: 120_000 });
+  const browser = await chromium.launch({ executablePath: await chromiumPath(), headless: true, args: ["--no-sandbox", "--disable-gpu"] });
+  try {
+    const page = await browser.newPage({ viewport: { width, height } });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: outputPath, fullPage });
+  } finally { await browser.close(); }
   return outputPath;
 }
 async function ffprobe(input: string): Promise<unknown> { const result = await exec("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", input], { timeout: 60_000 }); return JSON.parse(result.stdout); }
@@ -112,8 +121,8 @@ export async function executeDazzlePipeline(args: Brief & { operation: "create" 
   const compositionErrors = lintComposition(html);
   const generatedScreenshot = await screenshot(htmlPath, `${dir}/generated.png`, args.width, args.height);
   let targetScreenshot: string | undefined;
-  if (args.targetUrl) targetScreenshot = await screenshot(args.targetUrl, `${dir}/target.png`, args.width, args.height);
-  return { mode: args.operation, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", ...(snapshot ? ["target HTML fetched and content snapshot created"] : []), "contextual strategy selected", "deterministic HTML generated", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["target screenshot captured for redesign comparison"] : []), "ready for visual review"], source: snapshot ? { title: snapshot.title, description: snapshot.description, headings: snapshot.headings, snapshot: snapshotPath } : undefined, strategy: plan, artifacts: { html: htmlPath, strategy: strategyPath, generatedScreenshot, targetScreenshot, snapshot: snapshotPath }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: "Inspect generated.png (and target.png for redesign) with the connected vision model. Do not approve from source HTML alone." } };
+  if (args.targetUrl) targetScreenshot = await screenshot(args.targetUrl, `${dir}/target-full.png`, args.width, args.height, true);
+  return { mode: args.operation, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", ...(snapshot ? ["target HTML fetched and content snapshot created"] : []), "contextual strategy selected", "deterministic HTML generated", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["entire target page captured as a full-page screenshot for redesign comparison"] : []), "ready for visual review"], source: snapshot ? { title: snapshot.title, description: snapshot.description, headings: snapshot.headings, snapshot: snapshotPath } : undefined, strategy: plan, artifacts: { html: htmlPath, strategy: strategyPath, generatedScreenshot, targetScreenshot, targetScreenshots: targetScreenshot ? [targetScreenshot] : [], snapshot: snapshotPath }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: "Inspect generated.png and target-full.png (for redesign) with the connected vision model. Do not approve from source HTML alone." } };
 }
 
 export function registerCreativeTools(server: McpServer): void {

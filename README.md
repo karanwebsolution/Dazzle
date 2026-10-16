@@ -222,15 +222,16 @@ Dazzle's server, not the connected chat model, owns the expensive local tooling:
 
 Claude/Gemini then use their vision and design judgment to inspect the screenshot or extracted frames. FFmpeg itself does not understand whether a page is beautiful; it supplies real rendered frames so the model can critique what was actually built instead of trusting source HTML. Remotion and HyperFrames are supported as frame-accurate planning/export targets, not as substitutes for visual inspection.
 
-For an existing website, pass its HTTPS URL as `targetUrl` to the primary `dazzle` tool. Dazzle fetches the target HTML, extracts the title, meta description, H1/H2/H3 headings, and visible copy into `target-snapshot.json`, captures the target screenshot, then generates and attaches the redesign screenshot at the same viewport. This prevents a redesign from losing the original page's real product details while still forcing a visual quality review.
+For an existing website, pass its HTTPS URL as `targetUrl` to the primary `dazzle` tool. Dazzle fetches the target HTML, extracts the title, meta description, H1/H2/H3 headings, and visible copy into `target-snapshot.json`, then captures the **entire target page** into `target-full.png` with the installed Chromium browser. The full-page image is attached to the MCP response so the connected model can inspect the whole site, not only the hero viewport.
 
 ## Optional public MCP deployment: Railway
 
-Railway is a secondary HTTP hosting option. The repository includes [`railway.json`](railway.json), which uses the same Dockerfile as Render so Chromium and FFmpeg are installed consistently.
+Railway is a secondary HTTP hosting option. Railway's GitHub importer may not show or deploy the original repository correctly in every workspace. Fork or clone the repository into your own GitHub account first, then select your own copy in Railway. The repository includes [`railway.json`](railway.json), which uses the same Dockerfile as Render so Chromium and FFmpeg are installed consistently.
 
-1. Create a Railway project from `karanwebsolution/Dazzle`.
-2. Railway detects `railway.json` and builds `Dockerfile`.
-3. Add these variables:
+1. Fork or clone `karanwebsolution/Dazzle` into your own GitHub account.
+2. In Railway choose **New Project → Deploy from GitHub Repo** and select your copy.
+3. Railway detects `railway.json` and builds `Dockerfile`.
+4. Add these variables:
 
 ```text
 MCP_TRANSPORT=http
@@ -241,8 +242,8 @@ CHROMIUM_PATH=/usr/bin/chromium
 MCP_API_KEY=<strong-secret>
 ```
 
-4. Generate a public domain and verify `/health`.
-5. Connect Claude to `https://YOUR-RAILWAY-DOMAIN/mcp`.
+5. Generate a public domain and verify `/health`.
+6. Connect Claude to `https://YOUR-RAILWAY-DOMAIN/mcp`.
 
 Railway and Render are deployment alternatives, not requirements for local Claude Code or CLI use. Test Railway in this order:
 
@@ -251,7 +252,16 @@ curl -fsS https://YOUR-RAILWAY-DOMAIN/health
 curl -fsS -H "x-api-key: YOUR_MCP_API_KEY" https://YOUR-RAILWAY-DOMAIN/mcp
 ```
 
-The health response must show `authentication: "api-key"`, `oauth: false`, `runtime.chromium: "/usr/bin/chromium"`, and `runtime.ffmpeg: true`. A tools-list request made through an MCP client with the same `x-api-key` should return 54 tools.
+The health response must show `authentication: "api-key"`, `oauth: true`, `runtime.chromium: "/usr/bin/chromium"`, and `runtime.ffmpeg: true`. A tools-list request made through an MCP client with the same `x-api-key` should return 54 tools.
+
+### Railway troubleshooting
+
+- **OAuth registration fails:** confirm the deployed commit is the latest `main`, then redeploy. Public mode enables OAuth automatically; remove any old `MCP_ENABLE_OAUTH=false` variable.
+- **`spawn chromium ENOENT`:** confirm the service is using the repository `Dockerfile`, not a Node/Railpack build. Check that `/health` reports `runtime.chromium: "/usr/bin/chromium"`.
+- **Build fails at `pnpm install --frozen-lockfile`:** redeploy from the latest repository commit so `pnpm-lock.yaml`, `package.json`, and `Dockerfile` are from the same commit.
+- **401 Unauthorized:** verify `MCP_API_KEY` is set in Railway Variables and matches the client secret exactly.
+- **Timeout or sleeping:** inspect Railway deployment logs and redeploy after a failed build. A crashed deployment or resource limit can make the URL unavailable.
+- **Icon missing:** verify `https://YOUR-RAILWAY-DOMAIN/icon.svg` returns HTTP 200, then reconnect the Claude connector to refresh initialization metadata.
 
 ## Optional public MCP deployment: Render
 
