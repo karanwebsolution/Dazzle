@@ -4,7 +4,7 @@ import { confirm, isCancel, multiselect, outro, password, select, text } from "@
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { designDirector, effectSchema, generateLanding, layoutSchema, lintComposition, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema, type Effect3D, type LandingOptions, type LayoutName, type Section, type StyleName, type ThemeName } from "dazzle-core";
+import { designDirector, effectSchema, fontSchema, generateLanding, iconStyleSchema, layoutSchema, lintComposition, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema, type Effect3D, type LandingOptions, type LayoutName, type Section, type StyleName, type ThemeName, visualVariantSchema } from "dazzle-core";
 import { chat, configureProvider, listConfigured, preset, providerPresets, removeProvider, resolveProvider } from "./providers.js";
 
 const program = new Command();
@@ -47,6 +47,9 @@ program.command("create").description("create a tailored landing page from an in
   .option("-s, --style <style>", `visual style: ${listStyles().join(", ")}`)
   .option("--theme <theme>", `color mood: ${listThemes().map((x) => x.name).join(", ")}`)
   .option("--layout <layout>", "hero layout: centered, split, immersive")
+  .option("--font <font>", "font pairing: sora, manrope, space-grotesk, instrument-serif, fraunces, dm-sans")
+  .option("--icons <style>", "icon system: line, solid, geometric, editorial, minimal")
+  .option("--variant <variant>", "visual DNA: soft-tech, editorial-grid, neo-brutal, quiet-luxury, organic-flow, mono-lab")
   .option("-e, --effect <effect>", "motion effect")
   .option("--sections <list>", "comma-separated sections")
   .option("--color <hex>", "custom accent color")
@@ -56,7 +59,7 @@ program.command("create").description("create a tailored landing page from an in
   .option("--cta-href <url>", "primary CTA URL")
   .option("-o, --output <file>", "output file", "landing.html")
   .action(async (opts: Record<string, string | undefined>) => {
-    const options = opts.brand && opts.tagline ? { brand: opts.brand, tagline: opts.tagline, description: opts.description, style: asOption(opts.style, styleSchema), theme: asOption(opts.theme, themeSchema), layout: asOption(opts.layout, layoutSchema), effect3d: asOption(opts.effect, effectSchema), sections: asSections(opts.sections), primaryColor: opts.color, audience: opts.audience, creativeDirection: opts.creativeDirection, ctaLabel: opts.cta, ctaHref: opts.ctaHref } satisfies LandingOptions : await interactiveBrief();
+    const options = opts.brand && opts.tagline ? { brand: opts.brand, tagline: opts.tagline, description: opts.description, style: asOption(opts.style, styleSchema), theme: asOption(opts.theme, themeSchema), layout: asOption(opts.layout, layoutSchema), fontPreset: asOption(opts.font, fontSchema), iconStyle: asOption(opts.icons, iconStyleSchema), visualVariant: asOption(opts.variant, visualVariantSchema), effect3d: asOption(opts.effect, effectSchema), sections: asSections(opts.sections), primaryColor: opts.color, audience: opts.audience, creativeDirection: opts.creativeDirection, ctaLabel: opts.cta, ctaHref: opts.ctaHref } satisfies LandingOptions : await interactiveBrief();
     const output = opts.output ?? "landing.html"; const file = resolve(output); await writeFile(file, generateLanding(options)); console.log(`Generated ${file}`);
   });
 

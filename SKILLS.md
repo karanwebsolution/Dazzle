@@ -21,17 +21,19 @@ Dazzle is not a single landing-page template. It is a strategy-first creative wo
 12. **Theme direction** — choose midnight, aurora, sunset, paper, mono, or a context-specific custom palette.
 13. **Color systems** — define background, foreground, muted, accent, surface, contrast, and semantic states.
 14. **Typography direction** — pair display and utility type, set hierarchy, measure, tracking, and readable line length.
-15. **Layout composition** — choose centered, split, immersive, bento, editorial grid, or asymmetric composition.
-16. **Density control** — choose airy, balanced, or dense based on audience scanning behavior and information load.
-17. **Spacing rhythm** — use a consistent scale instead of arbitrary gaps.
-18. **Card systems** — choose borders, radius, depth, glass, editorial rules, or hard shadows with a reason.
-19. **CTA design** — set label, size, contrast, shape, microcopy, hover behavior, and placement.
-20. **Navigation design** — preserve information scent and keep navigation from competing with the promise.
-21. **Hero composition** — make the first viewport explain what, who, why now, and what to do next.
-22. **Section architecture** — add only sections that advance comprehension, trust, or action.
-23. **Social proof placement** — put evidence beside the moment of doubt, not only at the bottom.
-24. **Pricing design** — decide whether pricing helps qualification or distracts from an earlier CTA.
-25. **FAQ design** — answer real objections with short, direct language.
+15. **Font pairing** — choose a real font preset such as Sora, Space Grotesk, Instrument Serif, Fraunces, or DM Sans; use display and body roles intentionally.
+16. **Icon direction** — choose one coherent line, solid, geometric, editorial, or minimal icon language and map exactly where icons clarify scanning.
+17. **Layout composition** — choose centered, split, immersive, bento, editorial grid, or asymmetric composition.
+18. **Density control** — choose airy, balanced, or dense based on audience scanning behavior and information load.
+19. **Spacing rhythm** — use a consistent scale instead of arbitrary gaps.
+20. **Card systems** — choose borders, radius, depth, glass, editorial rules, or hard shadows with a reason.
+21. **CTA design** — set label, size, contrast, shape, microcopy, hover behavior, and placement.
+22. **Navigation design** — preserve information scent and keep navigation from competing with the promise.
+23. **Hero composition** — make the first viewport explain what, who, why now, and what to do next.
+24. **Section architecture** — add only sections that advance comprehension, trust, or action.
+25. **Social proof placement** — put evidence beside the moment of doubt, not only at the bottom.
+26. **Pricing design** — decide whether pricing helps qualification or distracts from an earlier CTA.
+27. **FAQ design** — answer real objections with short, direct language.
 
 ## Media and motion skills
 

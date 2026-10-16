@@ -27,4 +27,10 @@ describe("Dazzle generator", () => {
     const result = redesignLanding({ brand: "Ember", product: "Premium coffee subscription", goal: "make a sale" });
     expect(result.strategy.design.style).toBe("luxury"); expect(result.html).toContain("Ember"); expect(lintComposition(result.html)).toEqual([]);
   });
+  it("uses explicit modern font, icon, and visual DNA decisions", () => {
+    const strategy = designDirector({ brand: "Atlas", product: "AI research workspace", audience: "product leaders" });
+    const html = generateLanding(strategy.landing);
+    expect(strategy.design.fontPreset).toBe("space-grotesk"); expect(strategy.design.iconStyle).toBe("geometric"); expect(strategy.design.visualVariant).toBe("soft-tech");
+    expect(html).toContain("fonts.googleapis.com"); expect(html).toContain("icon-svg"); expect(html).toContain('data-variant="soft-tech"'); expect(html).toContain('data-font="space-grotesk"');
+  });
 });
