@@ -61,6 +61,31 @@ The `dazzle_generate_landing` tool accepts a complete brief: brand, tagline, des
 
 The MCP server also exposes `dazzle_list_styles`, `dazzle_list_themes`, `dazzle_list_sections`, `dazzle_preview_url`, and `dazzle_render_video`.
 
+## Deploy a public MCP on Render
+
+This repository includes [`render.yaml`](render.yaml), so you can deploy the MCP server directly from the Dazzle repo:
+
+1. Open **Render → New → Blueprint**.
+2. Select `karanwebsolution/Dazzle` and the `main` branch.
+3. Render will read `render.yaml`, install dependencies, build the monorepo, and start the HTTP MCP server.
+4. Set a strong value for the `MCP_API_KEY` secret when Render asks for it.
+
+After deployment, your public endpoints are:
+
+```text
+Health: https://YOUR-SERVICE.onrender.com/health
+MCP:    https://YOUR-SERVICE.onrender.com/mcp
+```
+
+The public server uses Streamable HTTP and accepts either `Authorization: Bearer YOUR_MCP_API_KEY` or `x-api-key: YOUR_MCP_API_KEY`. Configure your MCP client with the MCP URL and bearer token. The Render service automatically listens on Render's `PORT`; local stdio behavior remains unchanged for Claude Code and Cursor command-based configs.
+
+To run the public mode locally:
+
+```bash
+MCP_TRANSPORT=http MCP_API_KEY=dev-secret pnpm --filter dazzle-mcp start
+curl http://localhost:3000/health
+```
+
 ## Composition contract
 
 Every generated page includes composition metadata on `#root`: `data-composition-id`, dimensions, duration, and FPS. Animated elements are `.clip` nodes with `data-start` and `data-duration`. Timelines are seekable through `window.__timelines` and `window.__seek(seconds)`; no wall-clock animation is used.

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: dazzle-mcp
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter dazzle-mcp start
+    healthCheckPath: /health
+    envVars:
+      - key: MCP_TRANSPORT
+        value: http
+      - key: MCP_API_KEY
+        sync: false
