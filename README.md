@@ -65,6 +65,8 @@ The MCP server also exposes `dazzle_list_styles`, `dazzle_list_themes`, `dazzle_
 
 This repository includes [`render.yaml`](render.yaml), so you can deploy the MCP server directly from the Dazzle repo:
 
+For a phone-only walkthrough with every Render and Claude mobile screen step, see [`MOBILE-RENDER-SETUP.md`](MOBILE-RENDER-SETUP.md).
+
 1. Open **Render → New → Blueprint**.
 2. Select `karanwebsolution/Dazzle` and the `main` branch.
 3. Render will read `render.yaml`, install dependencies, build the monorepo, and start the HTTP MCP server.
