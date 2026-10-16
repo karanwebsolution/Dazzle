@@ -18,6 +18,7 @@ const oauthClients = new Map<string, { redirectUris: string[] }>();
 const authorizationCodes = new Map<string, { clientId: string; redirectUri: string; codeChallenge: string; scope: string; expiresAt: number }>();
 const accessTokens = new Map<string, { scope: string; expiresAt: number }>();
 const tokenSecret = apiKey ?? randomToken(32);
+const publicHttp = process.env.RENDER === "true" || process.env.MCP_PUBLIC === "true";
 
 function createMcpServer(iconUrl?: string): McpServer {
   const server = new McpServer({
@@ -25,7 +26,7 @@ function createMcpServer(iconUrl?: string): McpServer {
     websiteUrl: "https://github.com/karanwebsolution/Dazzle",
     description: "Beautiful, configurable landing pages from CLI or MCP.",
     icons: iconUrl ? [{ src: iconUrl, mimeType: "image/svg+xml", sizes: ["any"], theme: "dark" }] : undefined
-  }, { instructions: "Dazzle is a complete landing-page and redesign engine, not a question-answering reference. When a user asks to use Dazzle, create or redesign a website, make a landing page, improve visual quality, add animation, or turn an idea into a real page, call the primary `dazzle` tool immediately. Translate the normal-language request into brand, product, audience, goal, tone, operation, and targetUrl when relevant. Do not make the user provide system instructions. Do not manually orchestrate specialist tools: Dazzle runs strategy, generation, Chromium rendering, validation, FFmpeg-ready media artifacts, and screenshot attachment itself. After the tool returns images, inspect them and call `dazzle` again with a revised brief if the visual result is weak. Use specialist diagnostics only when DAZZLE_EXPOSE_SPECIALIST_TOOLS=true or when debugging." });
+  }, { instructions: "Dazzle is a complete landing-page and redesign engine, not a question-answering reference. When a user asks to use Dazzle, create or redesign a website, make a landing page, improve visual quality, add animation, or turn an idea into a real page, call the primary `dazzle` tool immediately. Translate the normal-language request into brand, product, audience, goal, tone, operation, and targetUrl when relevant. Do not make the user provide system instructions. Do not manually orchestrate specialist tools: Dazzle runs strategy, generation, Chromium rendering, validation, FFmpeg-ready media artifacts, and screenshot attachment itself. After the tool returns images, inspect them and call `dazzle` again with a revised brief if the visual result is weak. Local desktop mode exposes the full specialist catalog for inspection; use the primary dazzle tool for normal builds." });
   registerTools(server);
   return server;
 }
@@ -40,7 +41,7 @@ function registerTools(server: McpServer): void {
     existingHtml: z.string().optional().describe("Existing landing HTML or a concise description of the current page to improve"),
     targetUrl: z.string().url().optional().describe("Existing public page URL to capture before redesign")
   };
-  if (process.env.DAZZLE_EXPOSE_LEGACY_TOOLS === "true") {
+  if (process.env.DAZZLE_EXPOSE_LEGACY_TOOLS === "true" || !publicHttp) {
   server.tool("dazzle_design_director", "Legacy diagnostic. Prefer the primary dazzle tool for any real build.", strategyInput, async (args) => ({ content: [{ type: "text", text: JSON.stringify(designDirector(args), null, 2) }] }));
   server.tool("dazzle_redesign_landing", "Legacy alias routed through the complete Dazzle orchestrator. Prefer the primary dazzle tool.", strategyInput, async (args) => pipelineOutput(await executeDazzlePipeline({ ...args, operation: "redesign", outputDir: "/tmp/dazzle-legacy-redesign", width: 1440, height: 1000 })));
   server.tool("dazzle_generate_landing", "Create a polished, responsive landing page from a complete creative brief. Use the style, layout, sections, copy, audience, and color controls to make the result specific rather than generic.", {
@@ -75,7 +76,7 @@ function pkceChallenge(verifier: string): string { return createHash("sha256").u
 
 async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const resourceMetadata = `${origin(req)}/.well-known/oauth-protected-resource`;
-  if (!authorized(req)) { json(res, 401, { error: "Unauthorized" }, { "www-authenticate": `Bearer realm="dazzle", resource_metadata="${resourceMetadata}", scope="mcp:tools"` }); return; }
+  if (publicHttp && !authorized(req)) { json(res, 401, { error: "Unauthorized" }, { "www-authenticate": `Bearer realm="dazzle", resource_metadata="${resourceMetadata}", scope="mcp:tools"` }); return; }
   try {
     res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type, authorization, mcp-session-id, x-api-key"); res.setHeader("access-control-expose-headers", "mcp-session-id, mcp-protocol-version");
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); const server = createMcpServer(`${origin(req)}/icon.svg`); await server.connect(transport);
@@ -83,7 +84,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
   } catch (error) { if (!res.headersSent) json(res, 500, { error: error instanceof Error ? error.message : "MCP request failed" }); }
 }
 
-function resourceMetadata(req: IncomingMessage): Record<string, unknown> { const base = origin(req); return { resource: `${base}/mcp`, authorization_servers: [base], scopes_supported: ["mcp:tools"], bearer_methods_supported: ["header"] }; }
+function resourceMetadata(req: IncomingMessage): Record<string, unknown> { const base = origin(req); return { resource: `${base}/mcp`, authorization_servers: [base], scopes_supported: ["mcp:tools"], bearer_methods_supported: ["header"], icon: `${base}/icon.svg` }; }
 function authorizationMetadata(req: IncomingMessage): Record<string, unknown> { const base = origin(req); return { issuer: base, authorization_endpoint: `${base}/oauth/authorize`, token_endpoint: `${base}/oauth/token`, registration_endpoint: `${base}/oauth/register`, response_types_supported: ["code"], grant_types_supported: ["authorization_code"], token_endpoint_auth_methods_supported: ["none"], code_challenge_methods_supported: ["S256"], scopes_supported: ["mcp:tools"], client_id_metadata_document_supported: false }; }
 function loginPage(params: URLSearchParams, error = ""): string {
   const fields = [...["client_id", "redirect_uri", "response_type", "scope", "state", "code_challenge", "code_challenge_method"].map((key) => `<input type="hidden" name="${key}" value="${htmlEscape(params.get(key) ?? "")}">`)].join("");
@@ -120,11 +121,11 @@ async function startHttp(): Promise<void> {
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`); const path = url.pathname;
     if (req.method === "OPTIONS" && (path === "/mcp" || path.startsWith("/oauth/"))) { res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization, mcp-session-id, x-api-key", "access-control-allow-methods": "GET,POST,DELETE,OPTIONS" }); res.end(); return; }
-    if (path === "/health" && req.method === "GET") { json(res, 200, { status: "ok", name: "dazzle", transport: "streamable-http", oauth: true, authenticated: Boolean(apiKey), icon: `${origin(req)}/icon.svg`, runtime: { chromium: [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].filter(Boolean).find((candidate) => existsSync(candidate as string)) ?? null, ffmpeg: existsSync("/usr/bin/ffmpeg") } }); return; }
-    if ((path === "/icon.svg" || path === "/favicon.svg") && req.method === "GET") { res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" }); res.end(`<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17152a"/><stop offset="1" stop-color="#08090f"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4b5fd"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="url(#b)"/><circle cx="128" cy="128" r="87" fill="#8b5cf6" opacity=".12"/><path d="M128 25c8 63 40 95 103 103-63 8-95 40-103 103-8-63-40-95-103-103 63-8 95-40 103-103Z" fill="url(#s)"/><circle cx="128" cy="128" r="10" fill="#fff"/></svg>`); return; }
+    if (path === "/health" && req.method === "GET") { json(res, 200, { status: "ok", name: "dazzle", transport: "streamable-http", oauth: publicHttp, authenticated: publicHttp ? Boolean(apiKey) : true, icon: `${origin(req)}/icon.svg`, runtime: { chromium: [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].filter(Boolean).find((candidate) => existsSync(candidate as string)) ?? null, ffmpeg: existsSync("/usr/bin/ffmpeg") } }); return; }
+    if ((path === "/icon.svg" || path === "/favicon.svg") && (req.method === "GET" || req.method === "HEAD")) { res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*", "content-disposition": "inline" }); if (req.method === "HEAD") { res.end(); return; } res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Dazzle"><title>Dazzle</title><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17152a"/><stop offset="1" stop-color="#08090f"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4b5fd"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="url(#b)"/><circle cx="128" cy="128" r="87" fill="#8b5cf6" opacity=".12"/><path d="M128 25c8 63 40 95 103 103-63 8-95 40-103 103-8-63-40-95-103-103 63-8 95-40 103-103Z" fill="url(#s)"/><circle cx="128" cy="128" r="10" fill="#fff"/></svg>`); return; }
     if (path === "/mcp" && ["GET", "POST", "DELETE"].includes(req.method ?? "")) { void handleMcp(req, res); return; }
-    if (path.startsWith("/.well-known/") || path.startsWith("/oauth/")) { void handleOAuth(req, res, path, url); return; }
+    if (publicHttp && (path.startsWith("/.well-known/") || path.startsWith("/oauth/"))) { void handleOAuth(req, res, path, url); return; }
     json(res, 404, { error: "Not found", endpoints: ["/health", "/mcp", "/.well-known/oauth-protected-resource", "/oauth/authorize"] });
   });
   httpServer.listen(port, "0.0.0.0", () => console.log(`Dazzle MCP listening on port ${port} at /mcp (OAuth enabled)`));

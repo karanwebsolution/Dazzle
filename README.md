@@ -120,9 +120,18 @@ dazzle ai --prompt "Write a premium hero section for a coffee brand."
 
 Anthropic uses its native Messages API; the other presets use the common OpenAI-compatible `/chat/completions` contract. The provider layer is separate from the deterministic Dazzle renderer, so model output can help with strategy and copy while generated HTML remains validated by Dazzle's composition contract.
 
-## MCP setup
+## MCP setup — local desktop first
 
-Build the server and point Claude Code, Cursor, or another MCP client at `packages/mcp/dist/server.js`:
+Dazzle's primary workflow is local on a desktop with Claude Code, Cursor, or another stdio-capable MCP client. Local mode does **not** use OAuth, does not need Render, and exposes the complete **54-tool catalog**: the primary orchestrator, design specialists, typography/icon decisions, media planning, Chromium/FFmpeg diagnostics, validation, and compatibility tools.
+
+Build once:
+
+```bash
+pnpm install
+pnpm build
+```
+
+Point Claude Code, Cursor, or another local MCP client at `packages/mcp/dist/server.js`:
 
 ```json
 {
@@ -137,7 +146,7 @@ Build the server and point Claude Code, Cursor, or another MCP client at `packag
 
 The `dazzle_generate_landing` tool accepts a complete brief: brand, tagline, description, audience, creative direction, style, layout, theme, custom colors, effect, ordered sections, custom features/stats/FAQs/testimonial, CTA labels/links, and composition settings.
 
-The MCP server contains the full internal creative engine, but production exposes only three public tools: `dazzle`, `dazzle_build`, and `dazzle_capabilities`. This prevents model tool-selection drift. Specialist, media, and legacy generation tools remain available only in diagnostics mode.
+Local stdio mode exposes the complete 54-tool catalog so desktop users can inspect and use every capability. The primary `dazzle` tool still owns normal builds; specialist tools are available for deliberate diagnostics. Public HTTP deployments intentionally expose only `dazzle`, `dazzle_build`, and `dazzle_capabilities` by default so remote models do not drift into low-level tools.
 
 See the complete operating playbook in [`SKILLS.md`](SKILLS.md). It defines 46 reusable creative skills and the mandatory render → inspect → revise workflow.
 
@@ -191,10 +200,10 @@ You do **not** need to send a long system instruction. The MCP server now publis
 - “Make this page beautiful, animated, and conversion-focused.”
 - “Turn this idea into a real responsive website.”
 
-Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. Production exposes only three tools; all specialist, media, and legacy tools are hidden so they cannot compete for model attention. For debugging or development, expose them explicitly with:
+Claude should call `dazzle` automatically, map the request into the brief, receive the rendered screenshots, and critique or revise them. Local desktop mode exposes the full catalog automatically. Public HTTP mode keeps the catalog compact by default; set `DAZZLE_SHOW_ALL_TOOLS=true` only when you explicitly want the full catalog visible remotely:
 
 ```bash
-DAZZLE_EXPOSE_DIAGNOSTICS=true DAZZLE_EXPOSE_SPECIALIST_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true node packages/mcp/dist/server.js
+DAZZLE_SHOW_ALL_TOOLS=true DAZZLE_EXPOSE_LEGACY_TOOLS=true node packages/mcp/dist/server.js
 ```
 
 This keeps the production connector simple while preserving the full internal capability set.
@@ -213,7 +222,29 @@ Claude/Gemini then use their vision and design judgment to inspect the screensho
 
 For an existing website, pass its HTTPS URL as `targetUrl` to the primary `dazzle` tool. Dazzle fetches the target HTML, extracts the title, meta description, H1/H2/H3 headings, and visible copy into `target-snapshot.json`, captures the target screenshot, then generates and attaches the redesign screenshot at the same viewport. This prevents a redesign from losing the original page's real product details while still forcing a visual quality review.
 
-## Deploy a public MCP on Render
+## Optional public MCP deployment: Railway
+
+Railway is a secondary HTTP hosting option. The repository includes [`railway.json`](railway.json), which uses the same Dockerfile as Render so Chromium and FFmpeg are installed consistently.
+
+1. Create a Railway project from `karanwebsolution/Dazzle`.
+2. Railway detects `railway.json` and builds `Dockerfile`.
+3. Add these variables:
+
+```text
+MCP_TRANSPORT=http
+MCP_PUBLIC=true
+CHROMIUM_PATH=/usr/bin/chromium
+MCP_API_KEY=<strong-secret>
+```
+
+4. Generate a public domain and verify `/health`.
+5. Connect Claude to `https://YOUR-RAILWAY-DOMAIN/mcp`.
+
+Railway and Render are deployment alternatives, not requirements for local Claude Code or CLI use.
+
+## Optional public MCP deployment: Render
+
+Render is a secondary option for mobile or remote Claude users. It is not required for the main desktop workflow. The Render Free plan can sleep after inactivity and may cause a cold-start timeout; use a paid always-on plan for reliable long-running MCP sessions.
 
 This repository includes [`render.yaml`](render.yaml), so you can deploy the MCP server directly from the Dazzle repo:
 
@@ -227,7 +258,7 @@ For a phone-only walkthrough with every Render and Claude mobile screen step, se
 After deployment, verify the runtime before reconnecting Claude:
 
 ```text
-https://dazzle-2yh9.onrender.com/health
+https://YOUR-SERVICE.onrender.com/health
 ```
 
 The response must contain a non-null `runtime.chromium` (normally `/usr/bin/chromium`) and `runtime.ffmpeg: true`. If Chromium is `null`, the existing Render service is still the old native Node service; create/redeploy from the Docker Blueprint rather than only restarting the old service.
@@ -241,7 +272,7 @@ Health: https://YOUR-SERVICE.onrender.com/health
 MCP:    https://YOUR-SERVICE.onrender.com/mcp
 ```
 
-The public server uses Streamable HTTP and supports OAuth 2.1 with PKCE. It publishes protected-resource metadata, authorization-server metadata, dynamic client registration, a mobile-friendly sign-in page, and token exchange endpoints. The Render service automatically listens on Render's `PORT`; local stdio behavior remains unchanged for Claude Code and Cursor command-based configs.
+The public server uses Streamable HTTP and supports OAuth 2.1 with PKCE. It publishes protected-resource metadata, authorization-server metadata, dynamic client registration, a mobile-friendly sign-in page, and token exchange endpoints. OAuth is enabled only for public deployments; local stdio and local HTTP mode do not require or use OAuth. The Render service automatically listens on Render's `PORT`.
 
 For Claude web on a phone, open **Settings → Connectors → Add custom connector**, use `https://YOUR-SERVICE.onrender.com/mcp`, continue with the detected OAuth option, and sign in on the Dazzle page using the `MCP_API_KEY` value from Render. Claude then returns to the connector and stores the access token. If Claude shows an old failed sign-in, remove the connector and add it again after the latest Render deploy finishes.
 
