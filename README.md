@@ -77,7 +77,11 @@ Health: https://YOUR-SERVICE.onrender.com/health
 MCP:    https://YOUR-SERVICE.onrender.com/mcp
 ```
 
-The public server uses Streamable HTTP and accepts either `Authorization: Bearer YOUR_MCP_API_KEY` or `x-api-key: YOUR_MCP_API_KEY`. Configure your MCP client with the MCP URL and bearer token. The Render service automatically listens on Render's `PORT`; local stdio behavior remains unchanged for Claude Code and Cursor command-based configs.
+The public server uses Streamable HTTP and supports OAuth 2.1 with PKCE. It publishes protected-resource metadata, authorization-server metadata, dynamic client registration, a mobile-friendly sign-in page, and token exchange endpoints. The Render service automatically listens on Render's `PORT`; local stdio behavior remains unchanged for Claude Code and Cursor command-based configs.
+
+For Claude web on a phone, open **Settings → Connectors → Add custom connector**, use `https://YOUR-SERVICE.onrender.com/mcp`, continue with the detected OAuth option, and sign in on the Dazzle page using the `MCP_API_KEY` value from Render. Claude then returns to the connector and stores the access token. If Claude shows an old failed sign-in, remove the connector and add it again after the latest Render deploy finishes.
+
+OAuth endpoints are available at `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, `/oauth/register`, `/oauth/authorize`, and `/oauth/token`. The legacy API-key header (`Authorization: Bearer ...` or `x-api-key`) also remains supported for clients that do not implement OAuth.
 
 To run the public mode locally:
 
