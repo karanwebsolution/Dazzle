@@ -19,7 +19,7 @@ const authorizationCodes = new Map<string, { clientId: string; redirectUri: stri
 const accessTokens = new Map<string, { scope: string; expiresAt: number }>();
 const tokenSecret = apiKey ?? randomToken(32);
 const publicHttp = process.env.RENDER === "true" || process.env.MCP_PUBLIC === "true";
-const oauthEnabled = publicHttp && process.env.MCP_ENABLE_OAUTH === "true";
+const oauthEnabled = publicHttp && process.env.MCP_ENABLE_OAUTH !== "false";
 
 function createMcpServer(iconUrl?: string): McpServer {
   const server = new McpServer({
