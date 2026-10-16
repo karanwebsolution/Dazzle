@@ -18,11 +18,11 @@ const briefSchema = {
   brief: z.string().optional().describe("Additional human design direction")
 };
 
-type Brief = { brand: string; product: string; audience?: string; goal?: string; tone?: string; existingHtml?: string; brief?: string };
+type Brief = { brand: string; product: string; audience?: string; goal?: string; tone?: string; existingHtml?: string; brief?: string; competitorUrls?: string[]; competitorCount?: number };
 const output = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 export async function pipelineOutput(result: any): Promise<{ content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] }> {
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [{ type: "text", text: JSON.stringify(result, null, 2) }];
-  const screenshots: [string, string | undefined][] = [["generated", result.artifacts.generatedScreenshot], ["target full-page", result.artifacts.targetScreenshot], ...(result.artifacts.targetScreenshots ?? []).slice(1).map((path: string, index: number) => [`target segment ${index + 2}`, path] as [string, string])];
+  const screenshots: [string, string | undefined][] = [["generated", result.artifacts.generatedScreenshot], ["target full-page", result.artifacts.targetScreenshot], ...(result.artifacts.targetScreenshots ?? []).slice(1).map((path: string, index: number) => [`target segment ${index + 2}`, path] as [string, string]), ...(result.artifacts.competitorScreenshots ?? []).map((path: string, index: number) => [`competitor ${index + 1} full-page`, path] as [string, string])];
   for (const [label, path] of screenshots) {
     if (!path) continue;
     try { content.push({ type: "image", data: (await readFile(path)).toString("base64"), mimeType: "image/png" }); content.push({ type: "text", text: `${label} screenshot attached above. Inspect it visually before approving.` }); } catch { /* manifest still contains the path */ }
@@ -103,13 +103,47 @@ async function pageSnapshot(targetUrl: string): Promise<{ url: string; title: st
   return { url: response.url, title: one(/<title[^>]*>([\s\S]*?)<\/title>/i), description: one(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i), headings, visibleCopy };
 }
 
+async function discoverCompetitors(args: Brief, targetUrl?: string): Promise<string[]> {
+  const limit = Math.min(Math.max(args.competitorCount ?? 5, 1), 5);
+  const explicit = (args.competitorUrls ?? []).filter((url) => /^https?:\/\//.test(url)).slice(0, limit);
+  if (explicit.length >= limit) return explicit;
+  const query = encodeURIComponent(`${args.product} ${args.audience ?? ""} alternatives competitors landing page`);
+  try {
+    const response = await fetch(`https://html.duckduckgo.com/html/?q=${query}`, { signal: AbortSignal.timeout(15_000), headers: { "user-agent": "Dazzle/1.0 competitive-research" } });
+    const html = await response.text();
+    const targetHost = targetUrl ? new URL(targetUrl).hostname.replace(/^www\./, "") : "";
+    const found: string[] = [];
+    for (const match of html.matchAll(/class=["']result__a["'][^>]+href=["']([^"']+)["']/gi)) {
+      try {
+        const href = match[1];
+        if (!href) continue;
+        const url = new URL(href);
+        const host = url.hostname.replace(/^www\./, "");
+        if (!/^https?:$/.test(url.protocol) || host === targetHost || /duckduckgo|facebook|instagram|linkedin|youtube|wikipedia|g2|capterra|reddit/i.test(host) || found.some((item) => new URL(item).hostname === host)) continue;
+        found.push(url.toString());
+        if (found.length >= limit - explicit.length) break;
+      } catch { /* ignore malformed search result */ }
+    }
+    return [...explicit, ...found].slice(0, limit);
+  } catch { return explicit; }
+}
+
 export async function executeDazzlePipeline(args: Brief & { operation: "create" | "redesign"; targetUrl?: string; outputDir: string; width: number; height: number }): Promise<unknown> {
   const dir = args.outputDir;
   await mkdir(dir, { recursive: true });
   const snapshot = args.targetUrl ? await pageSnapshot(args.targetUrl).catch(() => undefined) : undefined;
+  const competitorUrls = await discoverCompetitors(args, args.targetUrl);
+  const competitorSnapshots: { url: string; snapshot?: Awaited<ReturnType<typeof pageSnapshot>>; screenshot?: string }[] = [];
+  for (const [index, competitorUrl] of competitorUrls.entries()) {
+    const competitorSnapshot = await pageSnapshot(competitorUrl).catch(() => undefined);
+    const competitorScreenshot = await screenshot(competitorUrl, `${dir}/competitors/competitor-${index + 1}-full.png`, args.width, args.height, true).catch(() => undefined);
+    competitorSnapshots.push({ url: competitorUrl, snapshot: competitorSnapshot, screenshot: competitorScreenshot });
+  }
+  const competitorContext = competitorSnapshots.map((item, index) => `COMPETITOR ${index + 1}: ${item.url}\nTitle: ${item.snapshot?.title ?? "unavailable"}\nHeadings: ${(item.snapshot?.headings ?? []).join(" | ")}\nUse only for category patterns and opportunity gaps; never copy its copy, layout, brand, or distinctive visual identity.`).join("\n\n");
   const inferredBrand = args.brand || snapshot?.title.split(/\s[|—-]\s/)[0] || "Dazzle project";
   const inferredProduct = args.product || snapshot?.headings[0] || snapshot?.title || "A clearer digital experience";
-  const enrichedArgs = { ...args, brand: inferredBrand, product: inferredProduct, existingHtml: snapshot ? `${args.existingHtml ?? ""}\nTARGET PAGE SNAPSHOT:\n${snapshot.visibleCopy}` : args.existingHtml };
+  const universalRules = "UNIVERSAL HUMAN-CENTERED DESIGN RULES: decide every section, sentence, transition, keyframe, card, button, navigation, header, footer, image, tutorial video, gradient, cursor effect, and 3D moment only when it improves comprehension, trust, retention, or action for this audience. Prefer original composition over template patterns. Avoid AI-looking filler, decorative motion without meaning, excessive gradients, generic bento grids, fake metrics, copycat competitor layouts, and dopamine tricks that harm clarity. Before finalizing, review the page as a first-time human visitor on mobile and desktop.";
+  const enrichedArgs = { ...args, brand: inferredBrand, product: inferredProduct, existingHtml: `${args.existingHtml ?? ""}\nTARGET PAGE SNAPSHOT:\n${snapshot?.visibleCopy ?? "No target page supplied."}\nCOMPETITIVE LANDSCAPE:\n${competitorContext || "No competitor pages were reachable; make independent category-aware decisions."}\n${universalRules}` };
   const plan = strategy(enrichedArgs);
   const html = generateLanding(plan.landing);
   const htmlPath = `${dir}/landing.html`;
@@ -118,16 +152,18 @@ export async function executeDazzlePipeline(args: Brief & { operation: "create" 
   await writeFile(strategyPath, `${JSON.stringify(plan, null, 2)}\n`);
   const snapshotPath = snapshot ? `${dir}/target-snapshot.json` : undefined;
   if (snapshotPath && snapshot) await writeFile(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+  const competitorPath = `${dir}/competitor-snapshots.json`;
+  await writeFile(competitorPath, `${JSON.stringify(competitorSnapshots, null, 2)}\n`);
   const compositionErrors = lintComposition(html);
   const generatedScreenshot = await screenshot(htmlPath, `${dir}/generated.png`, args.width, args.height);
   let targetScreenshot: string | undefined;
   if (args.targetUrl) targetScreenshot = await screenshot(args.targetUrl, `${dir}/target-full.png`, args.width, args.height, true);
-  return { mode: args.operation, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", ...(snapshot ? ["target HTML fetched and content snapshot created"] : []), "contextual strategy selected", "deterministic HTML generated", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["entire target page captured as a full-page screenshot for redesign comparison"] : []), "ready for visual review"], source: snapshot ? { title: snapshot.title, description: snapshot.description, headings: snapshot.headings, snapshot: snapshotPath } : undefined, strategy: plan, artifacts: { html: htmlPath, strategy: strategyPath, generatedScreenshot, targetScreenshot, targetScreenshots: targetScreenshot ? [targetScreenshot] : [], snapshot: snapshotPath }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: "Inspect generated.png and target-full.png (for redesign) with the connected vision model. Do not approve from source HTML alone." } };
+  return { mode: args.operation, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", ...(snapshot ? ["target HTML fetched and content snapshot created"] : []), ...(competitorSnapshots.length ? [`${competitorSnapshots.length} competitor pages fetched, analyzed, and captured`] : []), "contextual strategy selected", "deterministic HTML generated", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["entire target page captured for redesign comparison"] : []), "ready for human-centered visual review"], source: snapshot ? { title: snapshot.title, description: snapshot.description, headings: snapshot.headings, snapshot: snapshotPath } : undefined, competitiveLandscape: { requested: Math.min(args.competitorCount ?? 5, 5), discovered: competitorSnapshots.map((item) => item.url), snapshots: competitorPath, instruction: "Use competitors to identify category conventions and opportunities, never to copy their brand, copy, layout, or distinctive visual identity." }, strategy: plan, artifacts: { html: htmlPath, strategy: strategyPath, generatedScreenshot, targetScreenshot, targetScreenshots: targetScreenshot ? [targetScreenshot] : [], competitorScreenshots: competitorSnapshots.flatMap((item) => item.screenshot ? [item.screenshot] : []), competitorSnapshots: competitorPath, snapshot: snapshotPath }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: "Inspect generated.png, target-full.png, and competitor full-page screenshots. Review as a first-time human visitor before approving; do not approve from source HTML alone." } };
 }
 
 export function registerCreativeTools(server: McpServer): void {
   const exposeDiagnostics = process.env.DAZZLE_EXPOSE_DIAGNOSTICS === "true" || process.env.DAZZLE_SHOW_ALL_TOOLS === "true" || (!process.env.RENDER && !process.env.MCP_PUBLIC);
-  const buildSchema = { operation: z.enum(["create", "redesign"]).default("create"), brand: z.string().optional().default("Dazzle project"), product: z.string().optional().default("A clearer digital experience"), audience: z.string().optional(), goal: z.string().optional(), tone: z.string().optional(), brief: z.string().optional(), targetUrl: z.string().url().optional(), outputDir: z.string().default("/tmp/dazzle-build"), width: z.number().int().positive().default(1440), height: z.number().int().positive().default(1000) };
+  const buildSchema = { operation: z.enum(["create", "redesign"]).default("create"), brand: z.string().optional().default("Dazzle project"), product: z.string().optional().default("A clearer digital experience"), audience: z.string().optional(), goal: z.string().optional(), tone: z.string().optional(), brief: z.string().optional(), targetUrl: z.string().url().optional(), competitorUrls: z.array(z.string().url()).max(5).optional().describe("Optional competitor URLs; Dazzle discovers up to five when omitted"), competitorCount: z.number().int().min(1).max(5).default(5).describe("Number of competitor pages to research and capture"), outputDir: z.string().default("/tmp/dazzle-build"), width: z.number().int().positive().default(1440), height: z.number().int().positive().default(1000) };
   const buildDescription = "PRIMARY DAZZLE ACTION. Use this whenever the user asks to use Dazzle, create a landing page, redesign a website, improve a page, make a website beautiful, add animation, or turn an idea into a real page. Translate the user's normal-language request into these fields, then Dazzle manages strategy, generation, Chromium rendering, FFmpeg-ready artifacts, validation, and returns actual screenshots for visual review. Do not merely explain and do not manually select specialist tools.";
   server.tool("dazzle", buildDescription, buildSchema, async (args) => pipelineOutput(await executeDazzlePipeline(args)));
   server.tool("dazzle_build", buildDescription, buildSchema, async (args) => pipelineOutput(await executeDazzlePipeline(args)));
