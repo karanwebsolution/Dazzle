@@ -124,6 +124,8 @@ Anthropic uses its native Messages API; the other presets use the common OpenAI-
 
 Dazzle's primary workflow is local on a desktop with Claude Code, Cursor, or another stdio-capable MCP client. Local mode does **not** use OAuth, does not need Render, and exposes the complete **54-tool catalog**: the primary orchestrator, design specialists, typography/icon decisions, media planning, Chromium/FFmpeg diagnostics, validation, and compatibility tools.
 
+In local stdio mode, only the MCP client configured on that computer can use Dazzle. If you run local HTTP for testing, Dazzle binds to `127.0.0.1` and remains local to that computer; it is not exposed to the LAN.
+
 Build once:
 
 ```bash

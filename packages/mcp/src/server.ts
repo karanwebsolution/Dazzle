@@ -129,7 +129,8 @@ async function startHttp(): Promise<void> {
     if (oauthEnabled && (path.startsWith("/.well-known/") || path.startsWith("/oauth/"))) { void handleOAuth(req, res, path, url); return; }
     json(res, 404, { error: "Not found", endpoints: ["/health", "/mcp", "/.well-known/oauth-protected-resource", "/oauth/authorize"] });
   });
-  httpServer.listen(port, "0.0.0.0", () => console.log(`Dazzle MCP listening on port ${port} at /mcp (OAuth enabled)`));
+  const host = publicHttp ? "0.0.0.0" : "127.0.0.1";
+  httpServer.listen(port, host, () => console.log(`Dazzle MCP listening on ${host}:${port} at /mcp (${oauthEnabled ? "OAuth" : publicHttp ? "API-key" : "local"} mode)`));
 }
 
 if (process.env.MCP_TRANSPORT === "http" || process.env.RENDER === "true" || process.env.PORT) await startHttp();
