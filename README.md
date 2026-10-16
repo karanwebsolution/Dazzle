@@ -83,6 +83,20 @@ For Claude web on a phone, open **Settings → Connectors → Add custom connect
 
 OAuth endpoints are available at `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, `/oauth/register`, `/oauth/authorize`, and `/oauth/token`. The legacy API-key header (`Authorization: Bearer ...` or `x-api-key`) also remains supported for clients that do not implement OAuth.
 
+### Finding `MCP_API_KEY` in Render
+
+Open **Render Dashboard → dazzle-mcp service → Environment**. Under **Environment Variables**, find `MCP_API_KEY` and use the eye/reveal control if Render offers it. If the value is not revealable, create a new strong value, save it, and choose **Save, rebuild, and deploy**. Never commit this secret to GitHub or paste it into public messages.
+
+### Dazzle icon
+
+The server advertises the branded icon during MCP initialization and serves it at `/icon.svg` (also `/favicon.svg`):
+
+```text
+https://YOUR-SERVICE.onrender.com/icon.svg
+```
+
+After redeploying, remove and re-add the custom connector in Claude so Claude refreshes the connector metadata and displays the Dazzle icon. The source artwork is [`packages/mcp/src/dazzle.svg`](packages/mcp/src/dazzle.svg).
+
 To run the public mode locally:
 
 ```bash

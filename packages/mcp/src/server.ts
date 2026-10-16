@@ -16,6 +16,17 @@ const oauthClients = new Map<string, { redirectUris: string[] }>();
 const authorizationCodes = new Map<string, { clientId: string; redirectUri: string; codeChallenge: string; scope: string; expiresAt: number }>();
 const accessTokens = new Map<string, { scope: string; expiresAt: number }>();
 
+function createMcpServer(iconUrl?: string): McpServer {
+  const server = new McpServer({
+    name: "dazzle", title: "Dazzle", version: "0.3.0",
+    websiteUrl: "https://github.com/karanwebsolution/Dazzle",
+    description: "Beautiful, configurable landing pages from CLI or MCP.",
+    icons: iconUrl ? [{ src: iconUrl, mimeType: "image/svg+xml", sizes: ["any"], theme: "dark" }] : undefined
+  });
+  registerTools(server);
+  return server;
+}
+
 function registerTools(server: McpServer): void {
   server.tool("dazzle_generate_landing", "Create a polished, responsive landing page from a complete creative brief. Use the style, layout, sections, copy, audience, and color controls to make the result specific rather than generic.", {
     brand: z.string().min(1).describe("Brand, company, product, or event name"), tagline: z.string().min(1).describe("Hero headline or central promise"), description: z.string().optional(), eyebrow: z.string().optional(), audience: z.string().optional(), creativeDirection: z.string().optional(),
@@ -48,7 +59,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
   if (!authorized(req)) { json(res, 401, { error: "Unauthorized" }, { "www-authenticate": `Bearer realm="dazzle", resource_metadata="${resourceMetadata}", scope="mcp:tools"` }); return; }
   try {
     res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type, authorization, mcp-session-id, x-api-key"); res.setHeader("access-control-expose-headers", "mcp-session-id, mcp-protocol-version");
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); const server = new McpServer({ name: "dazzle", version: "0.3.0" }); registerTools(server); await server.connect(transport);
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); const server = createMcpServer(`${origin(req)}/icon.svg`); await server.connect(transport);
     const body = req.method === "POST" ? JSON.parse(await readBody(req)) : undefined; await transport.handleRequest(req, res, body);
   } catch (error) { if (!res.headersSent) json(res, 500, { error: error instanceof Error ? error.message : "MCP request failed" }); }
 }
@@ -90,7 +101,9 @@ async function startHttp(): Promise<void> {
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`); const path = url.pathname;
     if (req.method === "OPTIONS" && (path === "/mcp" || path.startsWith("/oauth/"))) { res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization, mcp-session-id, x-api-key", "access-control-allow-methods": "GET,POST,DELETE,OPTIONS" }); res.end(); return; }
-    if (path === "/health" && req.method === "GET") { json(res, 200, { status: "ok", name: "dazzle", transport: "streamable-http", oauth: true, authenticated: Boolean(apiKey) }); return; }
+    if (path === "/health" && req.method === "GET") { json(res, 200, { status: "ok", name: "dazzle", transport: "streamable-http", oauth: true, authenticated: Boolean(apiKey), icon: `${origin(req)}/icon.svg` }); return; }
+    if ((path === "/icon.svg" || path === "/favicon.svg") && req.method === "GET") { res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" }); res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17152a"/><stop offset="1" stop-color="#08090f"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4b5fd"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="url(#b)"/><circle cx="128" cy="128" r="87" fill="#8b5cf6" opacity=".12"/><path d="M128 25c8 63 40 95 103 103-63 8-95 40-103 103-8-63-40-95-103-103 63-8 95-40 103-103Z" fill="url(#s)"/><circle cx="128" cy="128" r="10" fill="#fff"/></svg>`); return; }
     if (path === "/mcp" && ["GET", "POST", "DELETE"].includes(req.method ?? "")) { void handleMcp(req, res); return; }
     if (path.startsWith("/.well-known/") || path.startsWith("/oauth/")) { void handleOAuth(req, res, path, url); return; }
     json(res, 404, { error: "Not found", endpoints: ["/health", "/mcp", "/.well-known/oauth-protected-resource", "/oauth/authorize"] });
@@ -99,4 +112,4 @@ async function startHttp(): Promise<void> {
 }
 
 if (process.env.MCP_TRANSPORT === "http" || process.env.RENDER === "true" || process.env.PORT) await startHttp();
-else { const server = new McpServer({ name: "dazzle", version: "0.3.0" }); registerTools(server); await server.connect(new StdioServerTransport()); }
+else { const server = createMcpServer(); await server.connect(new StdioServerTransport()); }
