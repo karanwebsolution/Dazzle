@@ -60,33 +60,28 @@ Dazzle is not a single landing-page template. It is a strategy-first creative wo
 45. **Pre-submit gate** — no page is approved until composition, responsive, accessibility, media, and visual checks pass.
 46. **Export hygiene** — produce deterministic HTML, image/video assets, metadata, and a clear handoff.
 
+## Ownership model
+
+The connected LLM is deliberately kept at one boundary. It translates a natural-language request into the `dazzle_build` input, inspects the returned rendered artifacts, and writes the critique. Dazzle owns deterministic strategy normalization, HTML generation, screenshots, FFmpeg/ffprobe, composition validation, manifests, and audit contracts. The 49 specialist tools are Dazzle's internal capabilities and should not force the user or model to manually orchestrate a long chain.
+
 ## Required agent workflow
 
 ### New page
 
-1. Run `dazzle_analyze_brief`.
-2. Run audience, journey, psychology, and conversion tools.
-3. Run style, theme, typography, layout, sections, CTA, and media-selection tools.
-4. Run `dazzle_generate_from_strategy` or `dazzle_redesign_landing`.
-5. Run `dazzle_validate_composition`.
-6. Run `dazzle_render_screenshot`.
-7. Run `dazzle_visual_audit`, accessibility, responsive, and motion audits.
-8. If motion/video exists, run FFmpeg probe and frame extraction.
-9. Use a vision-capable model to inspect the actual rendered image.
-10. Revise once or more if the visual result does not match the brief.
+1. Translate the user's plan into one `dazzle_build` call.
+2. Let Dazzle run strategy, generation, composition validation, Chromium render, and artifact creation.
+3. Use the returned screenshot and audit manifest with the same connected vision model.
+4. Revise once or more if the visual result does not match the brief.
+
+Use the specialist tools directly only when debugging a failed stage or when the user explicitly asks for a focused audit.
 
 ### Existing page redesign
 
-1. Capture the target URL with `dazzle_render_screenshot`.
-2. Inspect the target screenshot and identify clarity, hierarchy, trust, and interaction problems.
-3. Run `dazzle_redesign_plan` with the target description and business goal.
-4. Select a materially different design direction when the current page is generic.
-5. Generate the redesigned HTML and validate its composition.
-6. Capture the redesign screenshot at the same viewport.
-7. Compare target and redesign visually; do not approve based on source code alone.
-8. Run responsive, accessibility, motion, and performance audits.
-9. Extract and inspect video frames with FFmpeg if the page contains motion media.
-10. Only then submit or hand off the redesign.
+1. Translate the target URL, business goal, and redesign intent into one `dazzle_build` call with `operation: "redesign"` and `targetUrl`.
+2. Let Dazzle capture the target and generated page at the same viewport.
+3. Inspect both returned images with the same connected vision model.
+4. Run another `dazzle_build` call with the critique if the redesign is weak.
+5. Only then submit or hand off the redesign.
 
 ## Tooling boundary
 

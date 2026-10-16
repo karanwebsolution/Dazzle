@@ -162,6 +162,26 @@ Use Dazzle's design director to redesign this landing page from scratch. First a
 
 The assistant should call `dazzle_design_director` first when you want to inspect the reasoning, or `dazzle_redesign_landing` when you want strategy and generated HTML in one workflow.
 
+### Dazzle Orchestrator: one LLM boundary
+
+The recommended production entrypoint is now `dazzle_build`. The connected LLM has one job: understand the user's natural-language plan, fill the structured brief, inspect returned screenshots/frames, and write the final critique. Dazzle owns the rest:
+
+```text
+user plan → one LLM brief translation → dazzle_build
+          → strategy normalization
+          → HTML generation
+          → composition validation
+          → Chromium render
+          → target capture (redesign mode)
+          → FFmpeg/ffprobe and frame artifacts
+          → audit manifest
+          → LLM visual review
+```
+
+Call `dazzle_build` instead of manually asking the model to select 49 specialist tools. The specialist tools remain available for diagnostics and debugging, but they are internal capabilities of the Dazzle engine—not separate agents or a requirement for the user to orchestrate.
+
+The `dazzle_capabilities` tool exposes this ownership contract to any connected client.
+
 ### Visual verification before submission
 
 Dazzle's server, not the connected chat model, owns the expensive local tooling:
