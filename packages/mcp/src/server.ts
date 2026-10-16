@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { effectSchema, generateLanding, layoutSchema, listSections, listStyles, listThemes, sectionSchema, styleSchema, themeSchema } from "dazzle-core";
+import { designDirector, effectSchema, generateLanding, layoutSchema, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema } from "dazzle-core";
 
 const featureSchema = z.object({ title: z.string(), description: z.string(), icon: z.string().optional() });
 const statSchema = z.object({ value: z.string(), label: z.string() });
@@ -28,6 +28,16 @@ function createMcpServer(iconUrl?: string): McpServer {
 }
 
 function registerTools(server: McpServer): void {
+  const strategyInput = {
+    brand: z.string().min(1).describe("Brand, company, product, or project name"),
+    product: z.string().min(1).describe("What is being offered and the central promise"),
+    audience: z.string().optional().describe("Who will visit this page"),
+    goal: z.string().optional().describe("Desired visitor action: signup, demo, sale, booking, download, or inquiry"),
+    tone: z.string().optional().describe("Desired feeling or creative direction"),
+    existingHtml: z.string().optional().describe("Existing landing HTML or a concise description of the current page to improve")
+  };
+  server.tool("dazzle_design_director", "Think through a landing page before generating it. Analyze audience intent, trust barriers, cognitive load, CTA psychology, typography, palette, cards, sections, motion, graphics, image/video/Three.js moments, accessibility, and reduced-motion behavior. Return a structured design strategy that can be passed to dazzle_generate_landing.", strategyInput, async (args) => ({ content: [{ type: "text", text: JSON.stringify(designDirector(args), null, 2) }] }));
+  server.tool("dazzle_redesign_landing", "Redesign an existing landing page or product idea into a more conversational, animated, professional, and conversion-aware experience. First make design decisions, then return the strategy and complete HTML.", strategyInput, async (args) => { const result = redesignLanding(args); return { content: [{ type: "text", text: JSON.stringify({ strategy: result.strategy, html: result.html }, null, 2) }] }; });
   server.tool("dazzle_generate_landing", "Create a polished, responsive landing page from a complete creative brief. Use the style, layout, sections, copy, audience, and color controls to make the result specific rather than generic.", {
     brand: z.string().min(1).describe("Brand, company, product, or event name"), tagline: z.string().min(1).describe("Hero headline or central promise"), description: z.string().optional(), eyebrow: z.string().optional(), audience: z.string().optional(), creativeDirection: z.string().optional(),
     style: styleSchema.optional().describe("saas, editorial, bento, glass, brutalist, or luxury"), layout: layoutSchema.optional(), theme: themeSchema.optional(), primaryColor: z.string().optional(), backgroundColor: z.string().optional(), effect3d: effectSchema.optional(), sections: z.array(sectionSchema).optional().describe(`Supported: ${listSections().join(", ")}`),

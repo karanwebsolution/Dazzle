@@ -104,6 +104,49 @@ function sectionHtml(section: Section, p: ReturnType<typeof defaults>, accent: s
   return map[section];
 }
 
+export interface DesignStrategy {
+  summary: string;
+  audience: { primary: string; intent: string; awareness: "low" | "medium" | "high"; trustBarriers: string[] };
+  design: { style: StyleName; theme: ThemeName; layout: LayoutName; typography: string; palette: string[]; radius: string; density: "airy" | "balanced" | "dense" };
+  conversion: { primaryGoal: string; cta: string; ctaTreatment: string; trustSignals: string[]; frictionReducers: string[] };
+  motion: { level: "subtle" | "expressive" | "cinematic"; effect: Effect3D; choreography: string[]; reduceMotionFallback: string };
+  media: { heroVisual: "css-art" | "image" | "video" | "three-js"; imageMoments: string[]; videoMoments: string[]; avoid: string[] };
+  sections: { name: Section; reason: string; priority: "must" | "should" | "optional" }[];
+  psychology: { principle: string; application: string }[];
+  landing: LandingOptions;
+}
+
+function chooseStrategy(input: { brand: string; product: string; audience?: string; goal?: string; tone?: string; existingHtml?: string }): DesignStrategy {
+  const text = `${input.product} ${input.audience ?? ""} ${input.goal ?? ""} ${input.tone ?? ""}`.toLowerCase();
+  const isTechnical = /ai|saas|developer|api|software|tool|tech|data/.test(text);
+  const isPremium = /luxury|premium|fashion|jewel|architect|hotel|beauty|coffee/.test(text);
+  const isCreative = /agency|studio|portfolio|artist|creative|brand/.test(text);
+  const isTrustHeavy = /health|finance|legal|security|enterprise|education/.test(text);
+  const style: StyleName = isPremium ? "luxury" : isCreative ? "editorial" : isTechnical ? "saas" : "bento";
+  const theme: ThemeName = isPremium ? "paper" : isCreative ? "midnight" : /green|wellness|nature/.test(text) ? "aurora" : "midnight";
+  const layout: LayoutName = isCreative || isPremium ? "immersive" : "split";
+  const effect: Effect3D = isPremium || isCreative ? "gradient" : isTechnical ? "cube" : "particles";
+  const primary = input.audience ?? (isTechnical ? "product teams and technical decision makers" : "people actively looking for a better way");
+  const sections: { name: Section; reason: string; priority: "must" | "should" | "optional" }[] = [
+    { name: "hero", reason: "State the promise and make the next action obvious in the first screen.", priority: "must" },
+    { name: "features", reason: "Translate the promise into three memorable benefits.", priority: "must" },
+    { name: "showcase", reason: "Let visitors see the experience instead of only reading claims.", priority: isCreative || isTechnical ? "must" : "should" },
+    { name: "stats", reason: "Give the scanning visitor proof points they can process quickly.", priority: isTrustHeavy ? "must" : "should" },
+    { name: "testimonials", reason: "Borrow trust from a believable peer voice.", priority: isTrustHeavy ? "must" : "should" },
+    { name: "faq", reason: "Resolve objections close to the decision point.", priority: "should" },
+    { name: "cta", reason: "Repeat one focused conversion action after the argument is complete.", priority: "must" },
+    { name: "footer", reason: "Provide orientation and a calm exit path.", priority: "should" }
+  ];
+  const cta = input.goal?.toLowerCase().includes("demo") ? "Book a demo" : input.goal?.toLowerCase().includes("sale") ? "Shop now" : input.goal?.toLowerCase().includes("signup") ? "Start free" : "See what is possible";
+  const landing: LandingOptions = { brand: input.brand, tagline: input.product, description: `A clearer, more compelling way for ${primary}.`, audience: primary, creativeDirection: input.tone ?? "confident, human, premium, and focused", style, theme, layout, effect3d: effect, sections: sections.filter((x) => x.priority !== "optional").map((x) => x.name), ctaLabel: cta };
+  return { summary: `A ${style} ${layout} experience for ${primary}, designed to ${input.goal ?? "make the value immediately clear"}.`, audience: { primary, intent: input.goal ?? "understand the value and take the next step", awareness: isTrustHeavy ? "medium" : "low", trustBarriers: isTrustHeavy ? ["credibility", "risk", "proof of outcome"] : ["attention", "clarity", "choice overload"] }, design: { style, theme, layout, typography: isPremium ? "high-contrast editorial serif with restrained sans utility text" : isCreative ? "expressive display type paired with quiet body copy" : "confident geometric sans with generous hierarchy", palette: [themes[theme].background, themes[theme].foreground, themes[theme].accent, themes[theme].muted], radius: style === "luxury" ? "soft-square" : "friendly-pill", density: isPremium || isCreative ? "airy" : "balanced" }, conversion: { primaryGoal: input.goal ?? "earn a qualified next step", cta, ctaTreatment: "one high-contrast primary button, one low-pressure text link, repeat only after proof", trustSignals: isTrustHeavy ? ["specific outcomes", "customer proof", "clear process", "transparent FAQ"] : ["social proof", "specific benefits", "visible product moment"], frictionReducers: ["plain-language promise", "short sections", "one primary CTA", "answer objections before asking"] }, motion: { level: isCreative || isPremium ? "cinematic" : "subtle", effect, choreography: ["hero enters with staggered copy", "benefit cards reveal on scroll", "CTA receives a restrained hover lift", "motion never competes with the reading order"], reduceMotionFallback: "show all content at rest with no opacity-dependent information" }, media: { heroVisual: isCreative || isPremium ? "three-js" : isTechnical ? "image" : "css-art", imageMoments: ["product or outcome proof near the first benefit section"], videoMoments: isCreative ? ["short silent loop in the showcase section"] : [], avoid: ["generic stock people", "autoplay audio", "decorative media that delays the promise"] }, sections, psychology: [{ principle: "cognitive fluency", application: "Use one promise, one dominant CTA, and short scannable blocks." }, { principle: "progressive disclosure", application: "Lead with outcome, then benefits, proof, objections, and action." }, { principle: "social proof", application: "Place specific evidence near the moment of doubt, not only in the footer." }, { principle: "choice architecture", application: "Make the primary path obvious without hiding a respectful secondary path." }], landing };
+}
+
+/** Produce a reasoned design strategy before generating or redesigning a landing page. */
+export function designDirector(input: { brand: string; product: string; audience?: string; goal?: string; tone?: string; existingHtml?: string }): DesignStrategy { return chooseStrategy(input); }
+/** Redesign an existing page brief while preserving its brand and improving hierarchy, conversion, and visual direction. */
+export function redesignLanding(input: { brand: string; product: string; audience?: string; goal?: string; tone?: string; existingHtml?: string }): { strategy: DesignStrategy; html: string } { const strategy = designDirector(input); return { strategy, html: generateLanding(strategy.landing) }; }
+
 function styleOverrides(style: StyleName): string {
   const overrides: Record<StyleName, string> = {
     saas: "body{letter-spacing:-.01em}.feature-card,.showcase-window,.price-card{border-radius:1rem}",

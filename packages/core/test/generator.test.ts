@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateLanding, lintComposition, listSections, listStyles, listThemes } from "../src/index.js";
+import { designDirector, generateLanding, lintComposition, listSections, listStyles, listThemes, redesignLanding } from "../src/index.js";
 
 describe("Dazzle generator", () => {
   it("generates a valid composition from a detailed creative brief", () => {
@@ -18,5 +18,13 @@ describe("Dazzle generator", () => {
   });
   it("exposes all customization catalogs", () => {
     expect(listThemes().length).toBeGreaterThanOrEqual(5); expect(listStyles()).toContain("luxury"); expect(listSections()).toContain("faq");
+  });
+  it("makes contextual design decisions before generation", () => {
+    const strategy = designDirector({ brand: "Ledger", product: "Secure finance API", audience: "enterprise engineering teams", goal: "book a demo" });
+    expect(strategy.design.style).toBe("saas"); expect(strategy.conversion.cta).toBe("Book a demo"); expect(strategy.sections.some((section) => section.name === "faq")).toBe(true); expect(strategy.psychology.length).toBeGreaterThan(2);
+  });
+  it("redesigns a brief and returns valid HTML plus strategy", () => {
+    const result = redesignLanding({ brand: "Ember", product: "Premium coffee subscription", goal: "make a sale" });
+    expect(result.strategy.design.style).toBe("luxury"); expect(result.html).toContain("Ember"); expect(lintComposition(result.html)).toEqual([]);
   });
 });

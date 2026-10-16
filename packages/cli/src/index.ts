@@ -4,7 +4,7 @@ import { confirm, isCancel, multiselect, outro, select, text } from "@clack/prom
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { effectSchema, generateLanding, layoutSchema, lintComposition, listSections, listStyles, listThemes, sectionSchema, styleSchema, themeSchema, type Effect3D, type LandingOptions, type LayoutName, type Section, type StyleName, type ThemeName } from "dazzle-core";
+import { designDirector, effectSchema, generateLanding, layoutSchema, lintComposition, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema, type Effect3D, type LandingOptions, type LayoutName, type Section, type StyleName, type ThemeName } from "dazzle-core";
 
 const program = new Command();
 program.name("dazzle").description("Build any beautiful landing page from a clear creative brief.").version("0.2.0");
@@ -58,6 +58,23 @@ program.command("create").description("create a tailored landing page from an in
     const options = opts.brand && opts.tagline ? { brand: opts.brand, tagline: opts.tagline, description: opts.description, style: asOption(opts.style, styleSchema), theme: asOption(opts.theme, themeSchema), layout: asOption(opts.layout, layoutSchema), effect3d: asOption(opts.effect, effectSchema), sections: asSections(opts.sections), primaryColor: opts.color, audience: opts.audience, creativeDirection: opts.creativeDirection, ctaLabel: opts.cta, ctaHref: opts.ctaHref } satisfies LandingOptions : await interactiveBrief();
     const output = opts.output ?? "landing.html"; const file = resolve(output); await writeFile(file, generateLanding(options)); console.log(`Generated ${file}`);
   });
+
+program.command("strategy").description("show the contextual AI design strategy for a product brief")
+  .requiredOption("-b, --brand <name>", "brand or product name")
+  .requiredOption("-p, --product <promise>", "what the product offers")
+  .option("-a, --audience <text>", "target audience")
+  .option("-g, --goal <text>", "conversion goal")
+  .option("--tone <text>", "creative direction")
+  .action((opts: { brand: string; product: string; audience?: string; goal?: string; tone?: string }) => console.log(JSON.stringify(designDirector(opts), null, 2)));
+
+program.command("redesign").description("redesign a brief with strategy-first decisions")
+  .requiredOption("-b, --brand <name>", "brand or product name")
+  .requiredOption("-p, --product <promise>", "what the product offers")
+  .option("-a, --audience <text>", "target audience")
+  .option("-g, --goal <text>", "conversion goal")
+  .option("--tone <text>", "creative direction")
+  .option("-o, --output <file>", "output HTML file", "redesigned.html")
+  .action(async (opts: { brand: string; product: string; audience?: string; goal?: string; tone?: string; output: string }) => { const result = redesignLanding(opts); await writeFile(resolve(opts.output), result.html); console.log(`Generated ${resolve(opts.output)}\n\nDesign strategy:\n${result.strategy.summary}`); });
 
 program.command("lint").argument("<file>").description("validate composition metadata and seekable motion").action(async (file: string) => { const errors = lintComposition(await readFile(resolve(file), "utf8")); if (errors.length) { console.error(errors.map((x) => `✗ ${x}`).join("\n")); process.exitCode = 1; } else console.log("✓ Composition is valid"); });
 program.command("themes").action(() => listThemes().forEach((t) => console.log(`${t.name.padEnd(10)} ${t.accent}  ${t.background}`)));

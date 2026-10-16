@@ -61,6 +61,27 @@ The `dazzle_generate_landing` tool accepts a complete brief: brand, tagline, des
 
 The MCP server also exposes `dazzle_list_styles`, `dazzle_list_themes`, `dazzle_list_sections`, `dazzle_preview_url`, and `dazzle_render_video`.
 
+## AI Design Director and redesign mode
+
+Dazzle can now think through a page before generating it. The `dazzle_design_director` tool turns a product brief into a structured design strategy covering:
+
+- audience intent, awareness, trust barriers, and visitor psychology
+- visual style, theme, layout, typography, palette, radius, and density
+- primary conversion goal, CTA treatment, friction reducers, and proof placement
+- motion level, choreography, reduced-motion fallback, and 3D effect choice
+- where an image, video, CSS art, or Three.js moment is useful—and where it would be noise
+- must-have, should-have, and optional sections with a reason for each
+
+The `dazzle_redesign_landing` tool performs the next step: it makes those decisions and returns a complete redesigned HTML page plus the strategy that explains it. Use it for an existing HTML page, a rough description, or a page that needs a more conversational, animated, professional, and conversion-aware direction.
+
+### Claude prompt for contextual redesign
+
+```text
+Use Dazzle's design director to redesign this landing page from scratch. First analyze the audience, intent, trust barriers, cognitive load, CTA psychology, typography, palette, cards, motion, graphics, image/video/Three.js opportunities, and the sections that should be removed or added. Then generate the final responsive HTML. Product: an AI research workspace called Atlas. Audience: busy product leaders. Goal: start a free trial. Tone: calm, premium, intelligent, human, and memorable. Make it conversational and animated without harming accessibility or readability.
+```
+
+The assistant should call `dazzle_design_director` first when you want to inspect the reasoning, or `dazzle_redesign_landing` when you want strategy and generated HTML in one workflow.
+
 ## Deploy a public MCP on Render
 
 This repository includes [`render.yaml`](render.yaml), so you can deploy the MCP server directly from the Dazzle repo:
