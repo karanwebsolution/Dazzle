@@ -1,6 +1,6 @@
 ---
 name: landing-page-conversion-audit
-description: Audit landing pages, sales pages, product pages, opt-in pages, and checkout flows for conversion leaks. Use when reviewing a live page, diagnosing low conversion, checking paid-traffic message match, or improving a funnel before scaling.
+description: Audit rendered landing pages, sales pages, product pages, opt-in pages, and checkout flows for message-match, mobile, offer clarity, trust, friction, post-click, and measurement leaks. Use when reviewing a live page, diagnosing low conversion, checking paid-traffic message match, or improving a funnel before scaling.
 ---
 
 # Landing Page Conversion Audit
