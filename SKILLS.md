@@ -101,3 +101,7 @@ Use the specialist tools directly only when debugging a failed stage or when the
 - Do not fabricate customer logos, testimonials, stats, or performance claims.
 - Every animation needs a reduced-motion fallback.
 - Every redesign must be materially better for the stated audience, not merely different.
+
+## Conversion audit skill
+
+Use `skills/landing-page-conversion-audit/SKILL.md` whenever a user asks why a landing page is not converting, requests a CRO review, provides paid-traffic context, or asks to improve a checkout or funnel. Render the page with Chromium, review mobile first, state evidence limits, and return the required ranked report. Never promise lift percentages or recommend dark patterns.
