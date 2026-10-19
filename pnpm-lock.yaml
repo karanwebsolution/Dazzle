@@ -32,6 +32,9 @@ importers:
       dazzle-core:
         specifier: workspace:*
         version: link:../core
+      dazzle-magicui:
+        specifier: workspace:^
+        version: link:../magicui
     devDependencies:
       tsup:
         specifier: ^8.3.5
@@ -59,6 +62,15 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.5)
 
+  packages/magicui:
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.30)(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -67,6 +79,9 @@ importers:
       dazzle-core:
         specifier: workspace:*
         version: link:../core
+      dazzle-magicui:
+        specifier: workspace:^
+        version: link:../magicui
       playwright-core:
         specifier: ^1.55.0
         version: 1.64.1

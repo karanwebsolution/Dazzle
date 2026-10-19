@@ -4,6 +4,29 @@
 
 Dazzle creates **specific, polished, responsive landing pages** from the terminal or an MCP-connected assistant. It is not a random template picker: you control the story, style, layout, palette, sections, copy, CTA, audience, and motion.
 
+## Magic UI and cross-platform generation
+
+Dazzle vendors the complete Magic UI component source under [`vendor/magicui`](vendor/magicui), including its MIT license and upstream snapshot metadata. The adapter package [`packages/magicui`](packages/magicui) turns that registry into a context-aware catalog. It does not blindly paste a premade template: the orchestrator selects components based on visitor intent, conversion job, motion budget, media needs, and target platform.
+
+`dazzle_build` accepts `platform` values `web`, `mobile-web`, `android`, `macos`, and `windows`, plus `output` values `html`, `tsx`, and `tauri`. Every build writes `landing.html`, `landing.tsx`, `platform-plan.json`, `magicui-plan.json`, and `mobile-flow.json`. Android is touch-first and safe-area aware. macOS and Windows use Tauri 2 as the native shell while keeping the UI portable in TSX. Native commands remain an explicit Tauri integration boundary rather than being faked in the browser.
+
+Example MCP build intent:
+
+```json
+{
+  "operation": "create",
+  "brand": "Atlas",
+  "product": "An AI research workspace",
+  "audience": "busy product leaders",
+  "goal": "start a free trial",
+  "platform": "android",
+  "output": "tsx",
+  "media": "image"
+}
+```
+
+The full Magic UI upstream repository could not be created as a GitHub fork by the current GitHub integration because GitHub returned `403 Resource not accessible by integration`. Dazzle therefore keeps a complete vendored snapshot locally, with the upstream commit recorded in `vendor/magicui/UPSTREAM.md`; this preserves the source and license without falsely claiming a GitHub fork relationship.
+
 ## Quick start
 
 ```bash

@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { designDirector, effectSchema, fontSchema, generateLanding, iconStyleSchema, layoutSchema, lintComposition, listSections, listStyles, listThemes, redesignLanding, sectionSchema, styleSchema, themeSchema, type Effect3D, type LandingOptions, type LayoutName, type Section, type StyleName, type ThemeName, visualVariantSchema } from "dazzle-core";
+import { buildMobileFlow, chooseMagicComponents, platformPlan, type DazzleOutput, type DazzlePlatform } from "dazzle-magicui";
 import { chat, configureProvider, listConfigured, preset, providerPresets, removeProvider, resolveProvider } from "./providers.js";
 
 const program = new Command();
@@ -57,10 +58,16 @@ program.command("create").description("create a tailored landing page from an in
   .option("--creative-direction <text>", "visual/story direction")
   .option("--cta <label>", "primary CTA label")
   .option("--cta-href <url>", "primary CTA URL")
+  .option("--platform <platform>", "target platform: web, mobile-web, android, macos, windows", "web")
+  .option("--output-format <format>", "artifact format: html, tsx, tauri", "html")
   .option("-o, --output <file>", "output file", "landing.html")
   .action(async (opts: Record<string, string | undefined>) => {
     const options = opts.brand && opts.tagline ? { brand: opts.brand, tagline: opts.tagline, description: opts.description, style: asOption(opts.style, styleSchema), theme: asOption(opts.theme, themeSchema), layout: asOption(opts.layout, layoutSchema), fontPreset: asOption(opts.font, fontSchema), iconStyle: asOption(opts.icons, iconStyleSchema), visualVariant: asOption(opts.variant, visualVariantSchema), effect3d: asOption(opts.effect, effectSchema), sections: asSections(opts.sections), primaryColor: opts.color, audience: opts.audience, creativeDirection: opts.creativeDirection, ctaLabel: opts.cta, ctaHref: opts.ctaHref } satisfies LandingOptions : await interactiveBrief();
-    const output = opts.output ?? "landing.html"; const file = resolve(output); await writeFile(file, generateLanding(options)); console.log(`Generated ${file}`);
+    const output = opts.output ?? "landing.html"; const file = resolve(output); const html = generateLanding(options); await writeFile(file, html);
+    const platform = (opts.platform ?? "web") as DazzlePlatform; const format = (opts.outputFormat ?? "html") as DazzleOutput; const plan = platformPlan(platform, format); const dir = resolve(file, "..");
+    await writeFile(resolve(dir, "platform-plan.json"), `${JSON.stringify(plan, null, 2)}\n`); await writeFile(resolve(dir, "mobile-flow.json"), `${JSON.stringify(buildMobileFlow(), null, 2)}\n`); await writeFile(resolve(dir, "magicui-plan.json"), `${JSON.stringify({ components: chooseMagicComponents({ platform, media: "image", motion: "expressive" }).map((component) => component.name), source: "vendor/magicui", license: "MIT" }, null, 2)}\n`);
+    if (format !== "html" || file.endsWith(".tsx")) await writeFile(file.endsWith(".tsx") ? file : resolve(dir, "landing.tsx"), `import React from "react";\nexport default function DazzleLanding(): React.ReactElement { return <div data-dazzle-platform=${JSON.stringify(platform)} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(html)} }} />; }\n`);
+    console.log(`Generated ${file} for ${platform} (${format})`);
   });
 
 program.command("strategy").description("show the contextual AI design strategy for a product brief")
