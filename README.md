@@ -10,6 +10,10 @@ Dazzle vendors the complete Magic UI component source under [`vendor/magicui`](v
 
 `dazzle_build` accepts `platform` values `web`, `mobile-web`, `android`, `macos`, and `windows`, plus `output` values `html`, `tsx`, and `tauri`. Every build writes `landing.html`, `landing.tsx`, `platform-plan.json`, `magicui-plan.json`, and `mobile-flow.json`. Android is touch-first and safe-area aware. macOS and Windows use Tauri 2 as the native shell while keeping the UI portable in TSX. Native commands remain an explicit Tauri integration boundary rather than being faked in the browser.
 
+For product interfaces, set `experience` to `app`. This produces a workspace screen with an activity rail, dual sidebar/context areas, Agent/Editor/Preview tabs, composer, code surface, Skills, and human-review state. Dazzle automatically selects this mode when the brief clearly describes an app, dashboard, editor, IDE, agent, workspace, composer, or developer tool, but explicit `experience: "app"` is preferred for production builds. Landing mode is reserved for marketing pages.
+
+The Chromium renderer now waits for fonts and network settle, seeks deterministic timelines, checks that the page has visible text and non-zero dimensions, and fails the build when a blank capture is detected. A gradient-only screenshot is therefore a failed artifact, never a valid approval candidate.
+
 Example MCP build intent:
 
 ```json
