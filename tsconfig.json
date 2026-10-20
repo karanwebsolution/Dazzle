@@ -16,6 +16,9 @@
     "paths": {
       "dazzle-core": [
         "packages/core/src/index.ts"
+      ],
+      "dazzle-magicui": [
+        "packages/magicui/src/index.ts"
       ]
     }
   },

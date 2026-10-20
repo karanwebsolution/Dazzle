@@ -17,6 +17,7 @@ const apiKey = process.env.MCP_API_KEY;
 const oauthClients = new Map<string, { redirectUris: string[] }>();
 const authorizationCodes = new Map<string, { clientId: string; redirectUri: string; codeChallenge: string; scope: string; expiresAt: number }>();
 const accessTokens = new Map<string, { scope: string; expiresAt: number }>();
+const MAX_OAUTH_ENTRIES = 1000;
 const tokenSecret = apiKey ?? randomToken(32);
 const publicHttp = process.env.RENDER === "true" || process.env.MCP_PUBLIC === "true";
 const oauthEnabled = publicHttp;
@@ -64,12 +65,14 @@ function randomToken(bytes = 32): string { return randomBytes(bytes).toString("b
 function signedAccessToken(scope: string, expiresAt: number): string { const payload = Buffer.from(JSON.stringify({ scope, expiresAt }), "utf8").toString("base64url"); const signature = createHmac("sha256", tokenSecret).update(payload).digest("base64url"); return `dazzle_${payload}.${signature}`; }
 function verifyAccessToken(value: string): { scope: string; expiresAt: number } | undefined { try { const [prefix, signature] = value.split("."); if (!prefix?.startsWith("dazzle_") || !signature) return undefined; const payload = prefix.slice("dazzle_".length); const expected = createHmac("sha256", tokenSecret).update(payload).digest("base64url"); if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return undefined; const record = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { scope: string; expiresAt: number }; return record.expiresAt > Date.now() ? record : undefined; } catch { return undefined; } }
 function htmlEscape(value: string): string { return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c] ?? c)); }
+function constantTimeEqual(left: string | undefined, right: string | undefined): boolean { if (!left || !right) return false; const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
+function pruneOAuthState(): void { const now = Date.now(); for (const [key, value] of authorizationCodes) if (value.expiresAt <= now) authorizationCodes.delete(key); if (oauthClients.size > MAX_OAUTH_ENTRIES) oauthClients.delete(oauthClients.keys().next().value as string); }
 function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void { res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }); res.end(JSON.stringify(body)); }
 function readBody(req: IncomingMessage): Promise<string> { return new Promise((resolve, reject) => { let data = ""; req.setEncoding("utf8"); req.on("data", (chunk: string) => { data += chunk; if (data.length > 2_000_000) reject(new Error("Request body too large")); }); req.on("end", () => resolve(data)); req.on("error", reject); }); }
 function authorized(req: IncomingMessage): boolean {
   const value = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : undefined);
   if (!value) return false;
-  if (apiKey && value === apiKey) return true;
+  if (apiKey && constantTimeEqual(value, apiKey)) return true;
   const token = verifyAccessToken(value) ?? accessTokens.get(value);
   return Boolean(token && token.expiresAt > Date.now());
 }
@@ -97,17 +100,22 @@ async function handleOAuth(req: IncomingMessage, res: ServerResponse, path: stri
   if (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp") { json(res, 200, resourceMetadata(req)); return; }
   if (path === "/.well-known/oauth-authorization-server" || path === "/.well-known/openid-configuration") { json(res, 200, authorizationMetadata(req)); return; }
   if (path === "/oauth/register" && req.method === "POST") {
-    const data = JSON.parse(await readBody(req)) as { redirect_uris?: unknown }; const redirectUris = Array.isArray(data.redirect_uris) ? data.redirect_uris.filter((item): item is string => typeof item === "string") : [];
+    pruneOAuthState();
+    let data: { redirect_uris?: unknown };
+    try { data = JSON.parse(await readBody(req)) as { redirect_uris?: unknown }; } catch { json(res, 400, { error: "invalid_client_metadata", error_description: "Request body must be valid JSON" }); return; }
+    const redirectUris = Array.isArray(data.redirect_uris) ? data.redirect_uris.filter((item): item is string => { if (typeof item !== "string") return false; try { const parsed = new URL(item); return parsed.protocol === "https:" || parsed.hostname === "localhost"; } catch { return false; } }) : [];
     if (!redirectUris.length) { json(res, 400, { error: "invalid_client_metadata", error_description: "redirect_uris is required" }); return; }
+    if (oauthClients.size >= MAX_OAUTH_ENTRIES) { json(res, 503, { error: "temporarily_unavailable", error_description: "Too many registered clients" }); return; }
     const clientId = `dazzle_client_${randomToken(12)}`; oauthClients.set(clientId, { redirectUris }); json(res, 201, { client_id: clientId, client_id_issued_at: Math.floor(Date.now() / 1000), redirect_uris: redirectUris, token_endpoint_auth_method: "none" }); return;
   }
   if (path === "/oauth/authorize" && req.method === "GET") { res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }); res.end(loginPage(url.searchParams)); return; }
   if (path === "/oauth/authorize" && req.method === "POST") {
     const form = new URLSearchParams(await readBody(req)); const clientId = form.get("client_id") ?? ""; const redirectUri = form.get("redirect_uri") ?? ""; const client = oauthClients.get(clientId);
     if (!client || !client.redirectUris.includes(redirectUri)) { json(res, 400, { error: "invalid_request", error_description: "Unknown client or redirect URI" }); return; }
-    if (!apiKey || form.get("access_key") !== apiKey) { res.writeHead(401, { "content-type": "text/html; charset=utf-8" }); res.end(loginPage(form, "The access key is incorrect.")); return; }
+    if (!apiKey || !constantTimeEqual(form.get("access_key") ?? undefined, apiKey)) { res.writeHead(401, { "content-type": "text/html; charset=utf-8" }); res.end(loginPage(form, "The access key is incorrect.")); return; }
     const code = randomToken(); authorizationCodes.set(code, { clientId, redirectUri, codeChallenge: form.get("code_challenge") ?? "", scope: form.get("scope") || "mcp:tools", expiresAt: Date.now() + 5 * 60_000 });
-    const callback = new URL(redirectUri); callback.searchParams.set("code", code); if (form.get("state")) callback.searchParams.set("state", form.get("state") as string); res.writeHead(302, { location: callback.toString() }); res.end(); return;
+    let callback: URL; try { callback = new URL(redirectUri); } catch { json(res, 400, { error: "invalid_request", error_description: "Invalid redirect URI" }); return; }
+    callback.searchParams.set("code", code); if (form.get("state")) callback.searchParams.set("state", form.get("state") as string); res.writeHead(302, { location: callback.toString() }); res.end(); return;
   }
   if (path === "/oauth/token" && req.method === "POST") {
     const form = new URLSearchParams(await readBody(req)); const record = authorizationCodes.get(form.get("code") ?? ""); const client = oauthClients.get(form.get("client_id") ?? "");
@@ -126,7 +134,7 @@ async function startHttp(): Promise<void> {
     if ((path === "/icon.svg" || path === "/favicon.svg") && (req.method === "GET" || req.method === "HEAD")) { res.writeHead(200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*", "content-disposition": "inline" }); if (req.method === "HEAD") { res.end(); return; } res.end(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Dazzle"><title>Dazzle</title><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17152a"/><stop offset="1" stop-color="#08090f"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4b5fd"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="url(#b)"/><circle cx="128" cy="128" r="87" fill="#8b5cf6" opacity=".12"/><path d="M128 25c8 63 40 95 103 103-63 8-95 40-103 103-8-63-40-95-103-103 63-8 95-40 103-103Z" fill="url(#s)"/><circle cx="128" cy="128" r="10" fill="#fff"/></svg>`); return; }
     if (path === "/mcp" && ["GET", "POST", "DELETE"].includes(req.method ?? "")) { void handleMcp(req, res); return; }
-    if (oauthEnabled && (path.startsWith("/.well-known/") || path.startsWith("/oauth/"))) { void handleOAuth(req, res, path, url); return; }
+    if (oauthEnabled && (path.startsWith("/.well-known/") || path.startsWith("/oauth/"))) { void handleOAuth(req, res, path, url).catch((error) => { if (!res.headersSent) json(res, 400, { error: error instanceof Error ? error.message : "OAuth request failed" }); }); return; }
     json(res, 404, { error: "Not found", endpoints: ["/health", "/mcp", "/.well-known/oauth-protected-resource", "/oauth/authorize"] });
   });
   const host = publicHttp ? "0.0.0.0" : "127.0.0.1";

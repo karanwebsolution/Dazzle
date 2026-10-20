@@ -25,9 +25,10 @@ const plans: Record<DazzlePlatform, Omit<PlatformPlan, "platform" | "output">> =
 export function platformPlan(platform: DazzlePlatform, output: DazzleOutput = platform === "web" || platform === "mobile-web" ? "html" : "tsx"): PlatformPlan { return { platform, output, ...plans[platform] }; }
 
 export function chooseMagicComponents(input: { platform: DazzlePlatform; motion?: "subtle" | "expressive" | "cinematic"; media?: "image" | "video" | "3d" | "none" }): MagicComponent[] {
-  const wanted = input.platform === "mobile-web" || input.platform === "android" ? ["iphone", "android", "blur-fade", "scroll-progress", "magic-card", "animated-list"] : input.platform === "macos" || input.platform === "windows" ? ["magic-card", "dock", "command-menu", "blur-fade", "animated-list"] : ["magic-card", "blur-fade", "marquee", "border-beam", "scroll-progress"];
+  const wanted = input.platform === "mobile-web" || input.platform === "android" ? ["iphone", "android", "blur-fade", "scroll-progress", "magic-card", "animated-list"] : input.platform === "macos" || input.platform === "windows" ? ["magic-card", "dock", "blur-fade", "animated-list"] : ["magic-card", "blur-fade", "marquee", "border-beam", "scroll-progress"];
   const media = input.media === "video" ? ["hero-video-dialog"] : input.media === "3d" ? ["floating-3d-particles", "globe"] : [];
-  const names = [...wanted, ...media];
+  const motion = input.motion === "cinematic" ? ["particles"] : input.motion === "expressive" ? ["blur-fade"] : [];
+  const names = [...wanted, ...motion, ...media];
   return names.map(findMagicComponent).filter((component): component is MagicComponent => Boolean(component));
 }
 

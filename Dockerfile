@@ -11,11 +11,15 @@ WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 COPY packages ./packages
+COPY vendor ./vendor
+COPY skills ./skills
 
 RUN pnpm install --frozen-lockfile --prod=false && pnpm build
 
 ENV NODE_ENV=production
 
 ENV MCP_TRANSPORT=http
+ENV MCP_PUBLIC=true
+ENV PORT=10000
 EXPOSE 10000
 CMD ["node", "packages/mcp/dist/server.js"]

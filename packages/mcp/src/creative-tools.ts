@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { chromium } from "playwright-core";
@@ -78,13 +80,13 @@ async function chromiumPath(): Promise<string> {
   const candidates = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome", "chromium"].filter(Boolean) as string[];
   for (const candidate of candidates) {
     if (candidate.startsWith("/") && existsSync(candidate)) return candidate;
-    if (!candidate.startsWith("/")) { try { const found = await exec("sh", ["-lc", `command -v ${candidate}`]); if (found.stdout.trim()) return found.stdout.trim(); } catch { /* try next candidate */ } }
+    if (!candidate.startsWith("/")) { try { const found = await exec("which", [candidate]); if (found.stdout.trim()) return found.stdout.trim(); } catch { /* try next candidate */ } }
   }
   throw new Error("Dazzle visual runtime unavailable: Chromium was not found. Deploy the repository Dockerfile on Render or set CHROMIUM_PATH to an installed Chromium binary.");
 }
 async function screenshot(target: string, outputPath: string, width: number, height: number, fullPage = false): Promise<string> {
-  await mkdir(outputPath.substring(0, outputPath.lastIndexOf("/")), { recursive: true });
-  const url = /^https?:\/\//.test(target) ? target : `file://${target}`;
+  await mkdir(dirname(resolve(outputPath)), { recursive: true });
+  const url = safeRenderTarget(target);
   const browser = await chromium.launch({ executablePath: await chromiumPath(), headless: true, args: ["--no-sandbox", "--disable-gpu"] });
   try {
     const page = await browser.newPage({ viewport: { width, height } });
@@ -99,8 +101,20 @@ async function screenshot(target: string, outputPath: string, width: number, hei
   } finally { await browser.close(); }
   return outputPath;
 }
+function safeRenderTarget(target: string): string {
+  if (/^https?:\/\//i.test(target)) {
+    const url = new URL(target);
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "metadata.google.internal" || hostname === "ip6-localhost" || hostname === "0.0.0.0" || hostname === "127.0.0.1" || hostname === "169.254.169.254" || /^10\.|^192\.168\.|^172\.(?:1[6-9]|2\d|3[01])\./.test(hostname)) throw new Error("Refusing to render a private or local network target");
+    return url.toString();
+  }
+  const local = resolve(target.replace(/^file:\/\//i, ""));
+  if (!isAbsolute(local) || (!local.startsWith("/tmp/") && !local.startsWith(`${process.cwd()}/`))) throw new Error("Local render targets must be inside /tmp or the Dazzle workspace");
+  return pathToFileURL(local).href;
+}
 async function ffprobe(input: string): Promise<unknown> { const result = await exec("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", input], { timeout: 60_000 }); return JSON.parse(result.stdout); }
 async function pageSnapshot(targetUrl: string): Promise<{ url: string; title: string; description: string; headings: string[]; visibleCopy: string }> {
+  safeRenderTarget(targetUrl);
   try {
     const response = await fetch(targetUrl, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
     const html = await response.text();
@@ -133,7 +147,7 @@ async function discoverCompetitors(args: Brief, targetUrl?: string): Promise<str
       try {
         const href = match[1];
         if (!href) continue;
-        const url = new URL(href);
+        const url = new URL(href, "https://html.duckduckgo.com");
         const host = url.hostname.replace(/^www\./, "");
         if (!/^https?:$/.test(url.protocol) || host === targetHost || /duckduckgo|facebook|instagram|linkedin|youtube|wikipedia|g2|capterra|reddit/i.test(host) || found.some((item) => new URL(item).hostname === host)) continue;
         found.push(url.toString());
@@ -146,7 +160,7 @@ async function discoverCompetitors(args: Brief, targetUrl?: string): Promise<str
 }
 
 export async function executeDazzlePipeline(args: Brief & { operation: "create" | "redesign"; targetUrl?: string; outputDir: string; width: number; height: number }): Promise<unknown> {
-  const dir = args.outputDir;
+  const dir = args.outputDir === "/tmp/dazzle-build" ? `/tmp/dazzle-build-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : args.outputDir;
   await mkdir(dir, { recursive: true });
   const selectedPlatform = args.platform ?? "web";
   const selectedOutput = args.output ?? (selectedPlatform === "web" || selectedPlatform === "mobile-web" ? "html" : "tsx");
@@ -185,7 +199,7 @@ export async function executeDazzlePipeline(args: Brief & { operation: "create" 
   const compositionErrors = experience === "app" ? [] : lintComposition(html);
   const generatedScreenshot = await screenshot(htmlPath, `${dir}/generated.png`, args.width, args.height);
   let targetScreenshot: string | undefined;
-  if (args.targetUrl) targetScreenshot = await screenshot(args.targetUrl, `${dir}/target-full.png`, args.width, args.height, true);
+  if (args.targetUrl) targetScreenshot = await screenshot(args.targetUrl, `${dir}/target-full.png`, args.width, args.height, true).catch(() => undefined);
   return { mode: args.operation, experience, managedBy: "dazzle-orchestrator", llmRole: "translate the user's natural-language plan into this structured input and judge the returned rendered artifacts", stages: ["brief normalized", `experience selected: ${experience}`, `platform profile selected: ${selectedPlatform}`, `${selectedMagicComponents.length} Magic UI components selected by context`, "mobile flow mapped", ...(snapshot ? ["target HTML fetched and content snapshot created"] : []), ...(competitorSnapshots.length ? [`${competitorSnapshots.length} competitor pages attempted; unavailable pages remain marked`] : []), "conversion audit evidence prepared", "contextual strategy selected", `${experience === "app" ? "product workspace UI" : "landing page"} generated`, "HTML and TSX UI artifacts written", "composition validated", "Chromium screenshot rendered", ...(targetScreenshot ? ["entire target page captured for redesign comparison"] : []), "ready for human-centered visual review"], source: snapshot ? { title: snapshot.title, description: snapshot.description, headings: snapshot.headings, snapshot: snapshotPath } : undefined, competitiveLandscape: { requested: Math.min(args.competitorCount ?? 5, 5), discovered: competitorSnapshots.map((item) => item.url), snapshots: competitorPath, instruction: "Use competitors to identify category conventions and opportunities, never to copy their brand, copy, layout, or distinctive visual identity.", availability: competitorSnapshots.map((item) => ({ url: item.url, pageSnapshot: Boolean(item.snapshot), screenshot: Boolean(item.screenshot), status: item.snapshot && item.screenshot ? "captured" : "unavailable-or-blocked" })) }, conversionAudit: { evidence: [snapshot ? "target URL and rendered content" : "no target URL", "full-page screenshot", "generated page screenshot"], reportShape: ["Verdict", "Fix now (ordered by expected impact)", "Test, don't guess", "Not a problem", "Could not check"], limits: ["cap fixes at seven", "do not promise percentage lift", "label URL-only conclusions as estimates", "separate upstream offer problems from page problems"] }, platform: { plan: selectedPlatformPlan, mobileFlow, magicUiComponents: selectedMagicComponents.map((component) => component.name), desktopApp: selectedPlatform === "macos" || selectedPlatform === "windows" ? { framework: "Tauri 2", nativeShell: selectedPlatform, note: "Use platform-native commands only where the product needs them; keep the shared UI in the generated TSX layer." } : undefined }, strategy: plan, artifacts: { html: htmlPath, tsx: tsxPath, strategy: strategyPath, platformPlan: `${dir}/platform-plan.json`, magicUiPlan: `${dir}/magicui-plan.json`, mobileFlow: `${dir}/mobile-flow.json`, generatedScreenshot, targetScreenshot, targetScreenshots: targetScreenshot ? [targetScreenshot] : [], competitorScreenshots: competitorSnapshots.flatMap((item) => item.screenshot ? [item.screenshot] : []), competitorSnapshots: competitorPath, snapshot: snapshotPath }, validation: { compositionErrors, valid: compositionErrors.length === 0, visualReviewRequired: true, reviewInstruction: `Inspect generated.png, target-full.png, and competitor full-page screenshots. This is an ${experience} experience; reject blank captures, landing-page sections in an app brief, neon/purple defaults, and unavailable competitor evidence presented as fact.` } };
 }
 

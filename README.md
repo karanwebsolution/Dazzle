@@ -370,3 +370,9 @@ Video rendering remains an optional integration: install a compatible HyperFrame
 ## License
 
 MIT
+
+## Hardening notes
+
+The current build includes fresh-checkout TypeScript resolution for `dazzle-magicui`, package declarations, vendored `vendor/` and `skills/` assets in Docker, and public HTTP defaults for container deployment. The CLI creates nested output directories, validates platform and output-format values, handles Ctrl+C without persisting a cancel sentinel, and supports `pnpm dazzle` after `pnpm build`.
+
+The rendering path rejects private-network and unsafe local targets, converts local files through safe file URLs, avoids shell interpolation while locating Chromium, isolates default concurrent build directories, and treats blocked target screenshots as unavailable evidence instead of crashing the whole build. OAuth registration and authorization reject malformed input safely, use timing-safe key comparison, validate redirect URLs, and bound in-memory state.
